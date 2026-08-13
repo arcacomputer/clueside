@@ -14,4 +14,9 @@ describe('shouldTryWebGpu', () => {
   it('returns true when adapter is present', () => {
     assert.equal(shouldTryWebGpu({}), true);
   });
+
+  it('treats a missing adapter (Linux VM, some GPUs) as WASM-only', () => {
+    assert.equal(shouldTryWebGpu(null), false);
+    assert.equal(Boolean(null), false);
+  });
 });

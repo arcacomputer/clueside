@@ -1,10 +1,19 @@
 import { bytesToBase64 } from './bytes.js';
-import { isTransientAnalyzeError, withRetries } from './analyze-retry.js';
+import {
+  isTransientAnalyzeError,
+  isFetchSkipError,
+  withRetries,
+  withAnalyzeDeadline,
+  toSkipResult,
+  ANALYZE_TIMEOUT_MS,
+} from './analyze-retry.js';
+import { pickImageUrl } from './image-url.js';
 
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
 const badgeByEl = new WeakMap();
 const inFlight = new WeakSet();
+const waitingForLoad = new WeakSet();
 let enabled = true;
 let autoScan = true;
 let scanGeneration = 0;
@@ -13,14 +22,6 @@ let repositionRaf = 0;
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function parseSrcset(srcset) {
-  if (!srcset) return [];
-  return srcset
-    .split(',')
-    .map((part) => part.trim().split(/\s+/)[0])
-    .filter(Boolean);
 }
 
 function collectBackgroundUrls(el) {
@@ -53,52 +54,53 @@ function isVisible(el) {
   return true;
 }
 
-function badgeHost(el) {
-  if (el instanceof HTMLImageElement) {
-    return el.closest('picture') || el;
-  }
-  return el;
+/**
+ * Undo wraps from older builds. Never create a wrap; never replace img/picture.
+ */
+function unwrapLegacy(host) {
+  const wrap = host?.parentElement;
+  if (!wrap?.classList?.contains('haid-wrap')) return;
+  const parent = wrap.parentElement;
+  if (!parent) return;
+  parent.insertBefore(host, wrap);
+  wrap.remove();
 }
 
-function ensureWrap(host) {
-  const parent = host.parentElement;
-  if (parent?.classList.contains('haid-wrap')) return parent;
+function unwrapAllLegacy() {
+  document.querySelectorAll('.haid-wrap').forEach((wrap) => {
+    const host =
+      wrap.querySelector(':scope > picture, :scope > img') || wrap.firstElementChild;
+    if (host && wrap.parentElement) {
+      wrap.parentElement.insertBefore(host, wrap);
+    }
+    wrap.remove();
+  });
+}
 
-  const wrap = document.createElement('span');
-  wrap.className = 'haid-wrap';
-  const style = getComputedStyle(host);
-  if (style.float && style.float !== 'none') {
-    wrap.style.float = style.float;
-  }
-  wrap.style.display = style.display === 'block' ? 'block' : 'inline-block';
-  host.replaceWith(wrap);
-  wrap.appendChild(host);
-  return wrap;
+function overlayRoot() {
+  return document.body || document.documentElement;
 }
 
 function ensureBadge(el) {
-  let badge = badgeByEl.get(el);
-  if (badge && document.contains(badge)) return badge;
-  if (badge) badge.remove();
+  if (el instanceof HTMLImageElement) {
+    unwrapLegacy(el.closest('picture') || el);
+  } else {
+    unwrapLegacy(el);
+  }
 
-  const host = badgeHost(el);
-  const wrap = host.parentElement?.classList.contains('haid-wrap')
-    ? host.parentElement
-    : host instanceof HTMLImageElement || host instanceof HTMLPictureElement
-      ? ensureWrap(host)
-      : null;
+  let badge = badgeByEl.get(el);
+  if (badge && document.contains(badge)) {
+    placeBadge(el, badge);
+    return badge;
+  }
+  if (badge) badge.remove();
 
   badge = document.createElement('div');
   badge.className = 'haid-badge haid-pending';
   badge.textContent = '...';
   badge.setAttribute('role', 'status');
   badge.setAttribute('aria-live', 'polite');
-
-  if (wrap) {
-    wrap.appendChild(badge);
-  } else {
-    document.body.appendChild(badge);
-  }
+  overlayRoot().appendChild(badge);
 
   badgeByEl.set(el, badge);
   placeBadge(el, badge);
@@ -106,14 +108,6 @@ function ensureBadge(el) {
 }
 
 function placeBadge(el, badge) {
-  const wrap = badge.parentElement;
-  if (wrap?.classList.contains('haid-wrap')) {
-    badge.style.position = 'absolute';
-    badge.style.top = '4px';
-    badge.style.left = '4px';
-    return;
-  }
-
   if (!document.contains(el)) {
     badge.remove();
     return;
@@ -157,17 +151,18 @@ function renderBadge(el, result) {
     result = { error: 'No response from extension' };
   }
 
+  if (result.skipped || (result.error && isFetchSkipError(result.error))) {
+    const reason = result.reason || result.error || 'Skipped';
+    badge.classList.add('haid-skip');
+    badge.textContent = 'skip';
+    badge.title = reason;
+    return;
+  }
+
   if (result.error) {
     badge.classList.add('haid-uncertain');
     badge.textContent = shortError(result.error);
     badge.title = result.error;
-    return;
-  }
-
-  if (result.skipped) {
-    badge.classList.add('haid-skip');
-    badge.textContent = '-';
-    badge.title = result.reason || 'Skipped';
     return;
   }
 
@@ -202,26 +197,40 @@ function markFinal(el) {
   seenGeneration.set(el, scanGeneration);
 }
 
-async function analyzeHttpUrl(el, url, source) {
-  const { width, height } = elementSize(el);
-  ensureBadge(el);
-
-  const result = await withRetries(async () => {
-    const response = await chrome.runtime.sendMessage({
-      type: 'analyze-url',
-      requestId: uid(),
-      url: new URL(url, location.href).href,
-      width,
-      height,
-      source,
-    });
-    return response || { error: 'No response from extension' };
-  });
+function finalizeResult(el, result) {
+  if (result?.error && isFetchSkipError(result.error)) {
+    renderBadge(el, toSkipResult(result.error));
+    markFinal(el);
+    return;
+  }
 
   renderBadge(el, result);
   if (!result?.error || !isTransientAnalyzeError(result.error)) {
     markFinal(el);
   }
+}
+
+async function analyzeHttpUrl(el, url, source) {
+  const { width, height } = elementSize(el);
+  ensureBadge(el);
+
+  const result = await withAnalyzeDeadline(
+    () =>
+      withRetries(async () => {
+        const response = await chrome.runtime.sendMessage({
+          type: 'analyze-url',
+          requestId: uid(),
+          url: new URL(url, location.href).href,
+          width,
+          height,
+          source,
+        });
+        return response || { error: 'No response from extension' };
+      }),
+    { timeoutMs: ANALYZE_TIMEOUT_MS, timeoutMessage: 'Timed out' }
+  );
+
+  finalizeResult(el, result);
 }
 
 async function analyzeBlobOrData(el, url, source) {
@@ -233,27 +242,26 @@ async function analyzeBlobOrData(el, url, source) {
     const buffer = await res.arrayBuffer();
     const bufferB64 = bytesToBase64(buffer);
 
-    const result = await withRetries(async () => {
-      const response = await chrome.runtime.sendMessage({
-        type: 'analyze-buffer',
-        requestId: uid(),
-        url,
-        bufferB64,
-        width,
-        height,
-        source,
-      });
-      return response || { error: 'No response from extension' };
-    });
+    const result = await withAnalyzeDeadline(
+      () =>
+        withRetries(async () => {
+          const response = await chrome.runtime.sendMessage({
+            type: 'analyze-buffer',
+            requestId: uid(),
+            url,
+            bufferB64,
+            width,
+            height,
+            source,
+          });
+          return response || { error: 'No response from extension' };
+        }),
+      { timeoutMs: ANALYZE_TIMEOUT_MS, timeoutMessage: 'Timed out' }
+    );
 
-    renderBadge(el, result);
-    if (!result?.error || !isTransientAnalyzeError(result.error)) {
-      markFinal(el);
-    }
-  } catch {
-    renderBadge(el, {
-      error: 'Cannot read blob/data URL (cross-origin). No score shown.',
-    });
+    finalizeResult(el, result);
+  } catch (err) {
+    renderBadge(el, toSkipResult(err?.message || 'Cannot read blob/data URL'));
     markFinal(el);
   }
 }
@@ -292,26 +300,30 @@ function scanImg(el) {
   if (!(el instanceof HTMLImageElement)) return;
   if (!enabled || !autoScan) return;
 
-  const candidates = new Set();
-  if (el.currentSrc) candidates.add(el.currentSrc);
-  if (el.src) candidates.add(el.src);
-  for (const u of parseSrcset(el.srcset)) candidates.add(u);
+  unwrapLegacy(el.closest('picture') || el);
 
-  const picture = el.closest('picture');
-  if (picture) {
-    for (const source of picture.querySelectorAll('source')) {
-      if (source.src) candidates.add(source.src);
-      for (const u of parseSrcset(source.srcset)) candidates.add(u);
+  const url = pickImageUrl(el);
+  if (!url) {
+    if (!waitingForLoad.has(el)) {
+      waitingForLoad.add(el);
+      el.addEventListener(
+        'load',
+        () => {
+          waitingForLoad.delete(el);
+          scanImg(el);
+        },
+        { once: true }
+      );
     }
+    return;
   }
 
-  const url = [...candidates].find(Boolean);
-  if (url) queueImage(el, url, 'img');
+  queueImage(el, url, 'img');
 }
 
 function scanBackground(el) {
   if (!enabled || !autoScan) return;
-  if (el.classList?.contains('haid-wrap') || el.classList?.contains('haid-badge')) return;
+  if (el.classList?.contains('haid-badge') || el.classList?.contains('haid-wrap')) return;
   for (const url of collectBackgroundUrls(el)) {
     queueImage(el, url, 'background');
   }
@@ -350,6 +362,7 @@ const observer = new IntersectionObserver(
 
 function watch(el) {
   if (!(el instanceof Element)) return;
+  if (el.classList?.contains('haid-badge')) return;
   observer.observe(el);
 }
 
@@ -360,7 +373,9 @@ const mutationObserver = new MutationObserver((mutations) => {
         watch(node);
         scanImg(node);
       } else if (node instanceof Element) {
-        if (node.classList?.contains('haid-wrap') || node.classList?.contains('haid-badge')) {
+        if (node.classList?.contains('haid-badge')) continue;
+        if (node.classList?.contains('haid-wrap')) {
+          unwrapLegacy(node.querySelector('img, picture') || node.firstElementChild);
           continue;
         }
         watch(node);
@@ -377,6 +392,7 @@ const mutationObserver = new MutationObserver((mutations) => {
 
 function rescanAll() {
   scanGeneration += 1;
+  unwrapAllLegacy();
   document.querySelectorAll('img').forEach(scanImg);
   document.querySelectorAll('*').forEach(scanBackground);
 }
@@ -385,6 +401,7 @@ function attachObservers() {
   if (observersReady) return;
   observersReady = true;
 
+  unwrapAllLegacy();
   document.querySelectorAll('img').forEach(watch);
   document.querySelectorAll('*').forEach(watch);
 
