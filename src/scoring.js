@@ -5,6 +5,14 @@
 
 import { DEFAULT_THRESHOLD } from './fuse.js';
 
+/** Extra CLIP crops run only when center p(AI) is in this band. */
+export const TTA_ADAPTIVE_LOW = 0.15;
+
+/** Stop remaining crops once any sigmoid is this high. */
+export const TTA_EARLY_EXIT = 0.9;
+
+export const TTA_MODES = ['adaptive', 'always', 'center'];
+
 export function sigmoid(x) {
   return 1 / (1 + Math.exp(-x));
 }
@@ -20,6 +28,80 @@ export function logitAtProbability(p) {
  */
 export function neuralPAiFromLogit(logit) {
   return clamp01(sigmoid(logit));
+}
+
+/**
+ * Honest aggregation of per-view sigmoid scores. Max, not a stretch.
+ * @param {number[]} scores
+ * @returns {number}
+ */
+export function aggregateViewScores(scores) {
+  if (!scores?.length) return 0.5;
+  let max = 0;
+  for (const score of scores) {
+    const v = clamp01(score);
+    if (v > max) max = v;
+  }
+  return max;
+}
+
+/**
+ * Extra 440-corner / 512-center crops only help when the official center
+ * crop is uncertain. A confident real (for example 0.04) will not become
+ * 0.65 by taking the max of six similar scores.
+ * @param {number} centerScore
+ * @param {number} [threshold]
+ */
+export function shouldRunExtraCrops(centerScore, threshold = DEFAULT_THRESHOLD) {
+  const p = clamp01(centerScore);
+  return p >= TTA_ADAPTIVE_LOW && p < threshold;
+}
+
+/**
+ * Fold already-computed view scores with the production TTA policy.
+ * scores[0] is the official 440 center crop.
+ *
+ * @param {number[]} scores
+ * @param {{
+ *   mode?: 'adaptive' | 'always' | 'center',
+ *   threshold?: number,
+ *   earlyExit?: number,
+ * }} [options]
+ */
+export function foldTtaScores(scores, options = {}) {
+  const mode = options.mode || 'adaptive';
+  const threshold = options.threshold ?? DEFAULT_THRESHOLD;
+  const earlyExit = options.earlyExit ?? TTA_EARLY_EXIT;
+
+  if (!scores?.length) {
+    return { neuralPAi: 0.5, extraRan: false, earlyExit: false, used: [] };
+  }
+
+  const center = clamp01(scores[0]);
+  const used = [center];
+
+  if (center >= earlyExit) {
+    return { neuralPAi: center, extraRan: false, earlyExit: true, used };
+  }
+
+  const runExtra =
+    mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(center, threshold));
+
+  if (!runExtra) {
+    return { neuralPAi: center, extraRan: false, earlyExit: false, used };
+  }
+
+  let max = center;
+  for (let i = 1; i < scores.length; i++) {
+    const v = clamp01(scores[i]);
+    used.push(v);
+    if (v > max) max = v;
+    if (v >= earlyExit) {
+      return { neuralPAi: max, extraRan: true, earlyExit: true, used };
+    }
+  }
+
+  return { neuralPAi: max, extraRan: true, earlyExit: false, used };
 }
 
 function clamp01(v) {

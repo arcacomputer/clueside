@@ -6,7 +6,12 @@ import {
   ONNX_INPUT_NAME,
   ONNX_OUTPUT_NAME,
 } from './models.js';
-import { neuralPAiFromLogit } from './scoring.js';
+import {
+  neuralPAiFromLogit,
+  aggregateViewScores,
+  shouldRunExtraCrops,
+  TTA_EARLY_EXIT,
+} from './scoring.js';
 
 const REQUIRED_WASM_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
 
@@ -92,6 +97,80 @@ export async function predictCHW(session, chw) {
   const outputs = await session.run({ [ONNX_INPUT_NAME]: input });
   const logit = outputs[ONNX_OUTPUT_NAME].data[0];
   return neuralPAiFromLogit(logit);
+}
+
+/**
+ * Score every view and take max sigmoid. Used by the harness `--tta=always` probe.
+ * @param {ort.InferenceSession} session
+ * @param {Array<{name: string, chw: Float32Array}>} views
+ */
+export async function predictViews(session, views) {
+  const scores = [];
+  for (const view of views) {
+    scores.push(await predictCHW(session, view.chw));
+  }
+  return {
+    scores,
+    named: views.map((view, i) => ({ name: view.name, score: scores[i] })),
+    neuralPAi: aggregateViewScores(scores),
+    extraRan: views.length > 1,
+    earlyExit: false,
+  };
+}
+
+/**
+ * Production TTA: official 440 center first. Extra crops (440 corners + 512
+ * center) run only in the adaptive band, or when mode is `always`. Stops if
+ * any sigmoid is >= 0.9. Does not stretch scores.
+ *
+ * @param {ort.InferenceSession} session
+ * @param {Array<{name: string, chw: Float32Array}>} views
+ * @param {{ mode?: 'adaptive' | 'always' | 'center', earlyExit?: number }} [options]
+ */
+export async function predictAdaptiveViews(session, views, options = {}) {
+  const mode = options.mode || 'adaptive';
+  const earlyExit = options.earlyExit ?? TTA_EARLY_EXIT;
+
+  if (!views?.length) {
+    return {
+      scores: [],
+      named: [],
+      neuralPAi: 0.5,
+      extraRan: false,
+      earlyExit: false,
+    };
+  }
+
+  const scores = [];
+  const named = [];
+
+  const centerScore = await predictCHW(session, views[0].chw);
+  scores.push(centerScore);
+  named.push({ name: views[0].name, score: centerScore });
+
+  if (centerScore >= earlyExit) {
+    return { scores, named, neuralPAi: centerScore, extraRan: false, earlyExit: true };
+  }
+
+  const runExtra =
+    mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(centerScore));
+
+  if (!runExtra) {
+    return { scores, named, neuralPAi: centerScore, extraRan: false, earlyExit: false };
+  }
+
+  let max = centerScore;
+  for (let i = 1; i < views.length; i++) {
+    const score = await predictCHW(session, views[i].chw);
+    scores.push(score);
+    named.push({ name: views[i].name, score });
+    if (score > max) max = score;
+    if (score >= earlyExit) {
+      return { scores, named, neuralPAi: max, extraRan: true, earlyExit: true };
+    }
+  }
+
+  return { scores, named, neuralPAi: max, extraRan: true, earlyExit: false };
 }
 
 /**

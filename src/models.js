@@ -5,6 +5,7 @@ export const PREPROCESSOR_CONFIG_PATH = 'preprocessor_config.json';
 export const MODEL_FILES = [MODEL_ONNX_PATH, PREPROCESSOR_CONFIG_PATH, 'config.json'];
 
 export const SHORTEST_EDGE = 440;
+export const TTA_EXTRA_SHORTEST_EDGE = 512;
 export const CROP_SIZE = 384;
 
 export const CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073];
