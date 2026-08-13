@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' \
-            'DINOv2 probe ensemble with CommunityForensics (Fable). Local-bench accuracy lift. ORT install warnings stay silenced.' \
+            'First-run How to use card (pin toolbar icon, reload the tab, wait for badges). Always-visible legend for AI / OK / ? / skip. Scoring unchanged.' \
             '' \
             'Unpacked Chrome extension. Download the zip, extract it, then Load unpacked in chrome://extensions (Developer mode). Pick the folder that contains manifest.json.' \
             '' \
