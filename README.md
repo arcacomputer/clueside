@@ -5,6 +5,14 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 **Author:** Luis Felipe Abarca  
 **License:** MIT
 
+## How to use
+
+1. Pin the toolbar icon (Chrome puzzle, then pin).
+2. Reload the tab you are on.
+3. Wait for badges on large images (green OK or red AI). Optional: drop a file in the popup to check one image.
+
+**Badge legend:** red **AI** = likely generated; green **OK** = likely a real photo; orange **?** = not sure; gray **skip** = could not read that image. The percentage is p(AI). We label AI at 65% or higher. Analysis stays on this device.
+
 ## Install
 
 ### GitHub Release zip (recommended)
