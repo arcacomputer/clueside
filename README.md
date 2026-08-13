@@ -56,12 +56,13 @@ npm test
 
 ## Evaluation harness
 
-See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. Reports per-image CSV plus balanced accuracy at raw 0.65 when `ai/` and `real/` subfolders exist.
+See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. The harness is the product path (`clip-preprocess.js` + onnxruntime-web). On the public n=19 fixture at raw 0.65 it measured **88.89% BA** (7/9 AI, 10/10 real). That fixture is not the private bounty benchmark.
 
 ## Limitations
 
 - New or fine-tuned generators may score incorrectly until the model is retrained.
-- Photoreal DALL-E 3 images can score below threshold (observed on a small public n=19 fixture; not proof of 75% bounty accuracy).
+- Photoreal DALL-E 3 images can still score below threshold on a small public n=19 fixture (`pluto` 0.136, `crying-robot` 0.236 at raw 0.65 in the eval harness). This is not proof of 75% on the private bounty benchmark.
+- Preprocessing in production matches `src/clip-preprocess.js` (canvas in the extension, RawImage resize in the Node harness), not a live Hugging Face `AutoProcessor` call. Resize interpolation can differ slightly from upstream PIL bicubic; scores may differ from a standalone `transformers` notebook on the same file (for example `mars` scored 0.539 in an experiment but 0.878 in the harness).
 - Stripped metadata removes deterministic signals; neural-only mode is weaker.
 - Cross-origin `blob:`/`data:` URLs and CORS-blocked CDNs may show a grey badge with no score.
 - Small thumbnails, icons, and decorative images are skipped.
