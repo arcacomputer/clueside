@@ -9,7 +9,7 @@
     "fetch-model": "node scripts/fetch-model.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "build": "node scripts/generate-icons.mjs && node scripts/build.mjs",
-    "test": "node --test tests/fuse.test.mjs tests/scoring.test.mjs",
+    "test": "node --test tests/fuse.test.mjs tests/scoring.test.mjs tests/community-forensics.test.mjs",
     "eval": "node eval/harness.mjs"
   },
   "dependencies": {

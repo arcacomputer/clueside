@@ -4,6 +4,8 @@ import { preprocessBitmap } from './clip-preprocess.js';
 import {
   createCommunityForensicsSession,
   predictCHW,
+  probeWebGpuAdapter,
+  assetReachable,
   MODEL_ID,
   MODEL_ONNX_PATH,
 } from './community-forensics.js';
@@ -12,16 +14,18 @@ const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
 
 let session = null;
+let sessionDevice = 'wasm';
 let initError = null;
 let threshold = DEFAULT_THRESHOLD;
 
+async function modelFileReachable(file) {
+  const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
+  return assetReachable(url);
+}
+
 async function modelFilesPresent() {
-  const checks = HF_FILES.map(async (file) => {
-    const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
-    const res = await fetch(url, { method: 'HEAD' });
-    return res.ok;
-  });
-  return (await Promise.all(checks)).every(Boolean);
+  const checks = await Promise.all(HF_FILES.map((file) => modelFileReachable(file)));
+  return checks.every(Boolean);
 }
 
 async function downloadToCacheStorage() {
@@ -42,21 +46,28 @@ async function downloadToCacheStorage() {
 }
 
 async function ensureSession() {
-  if (session) return session;
+  if (session) return { session, device: sessionDevice };
   if (initError) throw initError;
 
   try {
     if (!(await modelFilesPresent())) {
       await downloadToCacheStorage();
+      if (!(await modelFilesPresent())) {
+        throw new Error('Model weights missing. Run npm run fetch-model and rebuild.');
+      }
     }
 
     const modelUrl = chrome.runtime.getURL(`models/${MODEL_ID}/${MODEL_ONNX_PATH}`);
-    session = await createCommunityForensicsSession({
+    const adapter = await probeWebGpuAdapter();
+    const created = await createCommunityForensicsSession({
       modelUrl,
       wasmPaths: chrome.runtime.getURL('lib/'),
-      useWebGpu: Boolean(navigator.gpu),
+      preferWebGpu: Boolean(adapter),
     });
-    return session;
+
+    session = created.session;
+    sessionDevice = created.device;
+    return created;
   } catch (err) {
     initError = err;
     throw err;
@@ -71,7 +82,7 @@ async function classifyImage(buffer, url, customThreshold) {
   let modelError = null;
 
   try {
-    const activeSession = await ensureSession();
+    const { session: activeSession } = await ensureSession();
     const mime = sniffMime(bytes);
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
@@ -107,8 +118,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message.type === 'init') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
-        await ensureSession();
-        sendResponse({ ok: true, device: navigator.gpu ? 'webgpu' : 'wasm' });
+        const { device } = await ensureSession();
+        sendResponse({ ok: true, device });
         return;
       }
 
