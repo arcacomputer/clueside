@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' \
-            'Update banner for Load-unpacked installs. Chrome cannot auto-replace unpacked extensions; the popup links the latest zip. Load 1.0.3 once to get future banners.' \
+            'Silence ONNX Runtime CPU-node warnings that Chrome listed as extension Errors on install. Scoring unchanged.' \
             '' \
             'Unpacked Chrome extension. Download the zip, extract it, then Load unpacked in chrome://extensions (Developer mode). Pick the folder that contains manifest.json.' \
             '' \
