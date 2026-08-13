@@ -3,5 +3,5 @@
   "dtype": "fp32",
   "onnx": "onnx/model.onnx",
   "inputSize": 384,
-  "fetchedAt": "2026-08-13T16:13:59.713Z"
+  "fetchedAt": "2026-08-13T19:05:06.643Z"
 }

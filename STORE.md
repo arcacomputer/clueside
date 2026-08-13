@@ -19,14 +19,14 @@ Character count: 105.
 Hybrid AI Image Detector estimates whether images on web pages (or files you drop in the popup) were likely created with AI. All inference runs on your device with WebGPU or WASM. Image bytes are not uploaded to a server.
 
 How it works
-- Neural score from CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX). Displayed confidence is sigmoid of a single logit. Default decision threshold is raw 65% p(AI), with no remapping of 50% model output to 65%.
+- Two local neural heads: CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX) plus a DINOv2-small feature probe (transparent logistic head). Displayed confidence is the max of the two raw sigmoids. Default decision threshold is raw 65% p(AI), with no remapping of 50% model output to 65%.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
-- Overlay badges on large page images. Popup drop zone for local files. Works offline after install when the store zip includes the model.
+- Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 
 Privacy
 - Images never leave your device.
 - No analytics, no account, no cloud inference API.
-- Optional one-time Hugging Face weight download only if the packaged model files are missing.
+- No runtime downloads: all weights ship in the package (fetched from Hugging Face at build time).
 
 Honesty
 - This is a single-purpose AI image detector. It does not block ads, manage tabs, or rewrite pages beyond overlay badges.
@@ -55,7 +55,7 @@ Saves the user's raw threshold (default 65%), enable toggle, and auto-scan toggl
 
 ### unlimitedStorage
 
-The CommunityForensics ONNX weights are about 83MB. The store package includes them. If weights are missing, a one-time download is stored in Cache Storage so later sessions stay offline. This permission is for on-device model files, not for uploading images.
+The bundled model weights total about 171MB (CommunityForensics ~83MB + DINOv2-small ~88MB). The store package includes them. This permission is for on-device model files, not for uploading images.
 
 ### activeTab
 
@@ -65,7 +65,7 @@ Used so the toolbar popup can talk to the current tab when the user drops a file
 
 CWS requires a public HTTPS privacy policy. Host `docs/privacy.html` from this repo (GitHub Pages on the `docs/` folder, or any HTTPS page you control with the same text). Do not use a `file://` URL.
 
-The policy states: images never leave the device; optional one-time Hugging Face weight download at setup if the packaged model is missing.
+The policy states: images never leave the device; all model weights ship in the package (fetched from Hugging Face at build time, never at runtime).
 
 ## Screenshots
 

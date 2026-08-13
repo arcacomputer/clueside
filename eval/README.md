@@ -2,6 +2,20 @@
 
 Dev-only Node scorer. Uses the same CommunityForensics ONNX model, CLIP preprocessing (`src/clip-preprocess.js`), heuristics, and fusion as the extension. This is the product path: `clip-preprocess.js` + onnxruntime-web.
 
+## Benchmark + probe tooling (added with the DINO head)
+
+All of these are dev-only and never ship in the extension:
+
+- `fetch-bench.mjs <dir>` — build a labeled eval bench from public HF datasets (modern AI gens + diverse reals), file names prefixed by source.
+- `degrade.mjs <in> <out>` — web-realistic copies (max 800px, JPEG q78) via macOS `sips`.
+- `sweep.mjs <dir> <out.jsonl>` — score every TTA view per image with onnxruntime-node (no early exit) for offline policy simulation.
+- `analyze.mjs <sweep.jsonl> [--dino=scores.jsonl]` — simulate TTA policies / thresholds / ensembles, report BA/TPR/TNR per source.
+- `fetch-train.mjs <dir>` — probe TRAINING set, disjoint from the bench (different datasets, or row offsets ≥ 200).
+- `extract-features.mjs <dir> <dino.onnx> <prefix> [--augment]` — DINOv2 CLS+mean features; `--augment` adds JPEG/resize degradation (training only).
+- `train-probe.mjs <prefix> <probe.json>` — logistic head with a hash-split validation report.
+- `score-dino.mjs <prefix> <probe.json> <out.jsonl>` — probe scores for a feature set.
+- `parity/` — in-browser harness running the exact product path (canvas + onnxruntime-web) over the bench to validate that Node numbers transfer.
+
 ## Prerequisites
 
 ```bash

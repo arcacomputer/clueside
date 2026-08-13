@@ -8,6 +8,24 @@ export const UNCERTAIN_LOW = 0.45;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
+ * Two independent neural heads cover complementary failure modes:
+ * CommunityForensics (384 crops, near-zero false positives on real
+ * photos) and the DINOv2 probe (global 224 view, carries modern
+ * generators CF under-scores). Max is the honest combination for
+ * "either detector fired"; measured on the local bench it lifts AI
+ * recall massively while real-photo scores stay near zero on both
+ * heads.
+ * @param {number} cfScore CommunityForensics p(AI) after TTA
+ * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
+ * @returns {number}
+ */
+export function fuseNeuralScores(cfScore, dinoScore) {
+  const cf = clamp01(cfScore);
+  if (dinoScore == null || Number.isNaN(dinoScore)) return cf;
+  return Math.max(cf, clamp01(dinoScore));
+}
+
+/**
  * @typedef {object} HeuristicSignals
  * @property {boolean} c2paAi
  * @property {string|null} c2paReason

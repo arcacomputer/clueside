@@ -107,11 +107,16 @@ export function packedRgbToCHW(data, channels) {
   const plane = CROP_SIZE * CROP_SIZE;
   const out = new Float32Array(3 * plane);
 
+  // Grayscale sources have channels < 3; replicate the single channel
+  // instead of reading past the pixel (which yields NaN).
+  const gOff = channels >= 3 ? 1 : 0;
+  const bOff = channels >= 3 ? 2 : 0;
+
   for (let i = 0; i < plane; i++) {
     const base = i * channels;
     const r = data[base] / 255;
-    const g = data[base + 1] / 255;
-    const b = data[base + 2] / 255;
+    const g = data[base + gOff] / 255;
+    const b = data[base + bOff] / 255;
 
     out[i] = (r - CLIP_MEAN[0]) / CLIP_STD[0];
     out[i + plane] = (g - CLIP_MEAN[1]) / CLIP_STD[1];
@@ -136,6 +141,7 @@ export function imageDataToCHW(imageData) {
 function cropCanvas(sourceCanvas, sx, sy) {
   const crop = new OffscreenCanvas(CROP_SIZE, CROP_SIZE);
   const cropCtx = crop.getContext('2d', { willReadFrequently: true });
+  // 1:1 blit; smoothing settings are irrelevant here but harmless.
   cropCtx.drawImage(sourceCanvas, sx, sy, CROP_SIZE, CROP_SIZE, 0, 0, CROP_SIZE, CROP_SIZE);
   return imageDataToCHW(cropCtx.getImageData(0, 0, CROP_SIZE, CROP_SIZE));
 }
@@ -143,6 +149,12 @@ function cropCanvas(sourceCanvas, sx, sy) {
 function resizeBitmapCanvas(bitmap, resizedW, resizedH) {
   const resizeCanvas = new OffscreenCanvas(resizedW, resizedH);
   const resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
+  // The model was trained on PIL bicubic (resample=3). Chrome's default
+  // imageSmoothingQuality 'low' is bilinear and visibly changes the
+  // texture statistics CommunityForensics keys on; 'high' is the
+  // closest canvas filter to the training-time resize.
+  resizeCtx.imageSmoothingEnabled = true;
+  resizeCtx.imageSmoothingQuality = 'high';
   resizeCtx.drawImage(bitmap, 0, 0, resizedW, resizedH);
   return resizeCanvas;
 }
