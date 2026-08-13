@@ -1,3 +1,5 @@
+import { bytesToBase64 } from './bytes.js';
+
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
 const badgeByEl = new WeakMap();
@@ -83,6 +85,10 @@ function renderBadge(el, result) {
 
   badge.classList.remove('haid-pending', 'haid-ai', 'haid-uncertain', 'haid-real', 'haid-skip', 'haid-error');
 
+  if (!result) {
+    result = { error: 'No response from extension' };
+  }
+
   if (result.error) {
     badge.classList.add('haid-uncertain');
     badge.textContent = shortError(result.error);
@@ -152,7 +158,7 @@ async function analyzeBlobOrData(el, url, source) {
       type: 'analyze-buffer',
       requestId,
       url,
-      buffer,
+      bufferB64: bytesToBase64(buffer),
       width,
       height,
       source,
@@ -161,8 +167,7 @@ async function analyzeBlobOrData(el, url, source) {
     renderBadge(el, result);
   } catch {
     renderBadge(el, {
-      error: true,
-      reason: 'Cannot read blob/data URL (cross-origin). No score shown.',
+      error: 'Cannot read blob/data URL (cross-origin). No score shown.',
     });
   }
 }

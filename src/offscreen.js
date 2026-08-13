@@ -1,6 +1,7 @@
 import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
 import { preprocessBitmap } from './clip-preprocess.js';
+import { base64ToBytes } from './bytes.js';
 import {
   createCommunityForensicsSession,
   predictCHW,
@@ -12,6 +13,7 @@ import {
 
 const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 
 let session = null;
 let sessionDevice = 'wasm';
@@ -74,8 +76,61 @@ async function ensureSession() {
   }
 }
 
-async function classifyImage(buffer, url, customThreshold) {
-  const bytes = buffer instanceof ArrayBuffer ? buffer : buffer.buffer;
+async function fetchImageBytes(url) {
+  const res = await fetch(url, { credentials: 'omit', cache: 'force-cache' });
+  if (!res.ok) {
+    throw new Error(`Image fetch failed (${res.status})`);
+  }
+
+  const type = res.headers.get('content-type') || '';
+  if (type && !type.startsWith('image/')) {
+    throw new Error(`Not an image content-type (${type})`);
+  }
+
+  const cl = Number(res.headers.get('content-length') || 0);
+  if (cl > MAX_IMAGE_BYTES) {
+    throw new Error('Image exceeds size cap');
+  }
+
+  const buffer = await res.arrayBuffer();
+  if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error('Image exceeds size cap');
+  }
+
+  return buffer;
+}
+
+/**
+ * Resolve image bytes from the message. sendMessage JSON-serializes
+ * payloads, so raw ArrayBuffers never arrive here. Accepted transports:
+ * base64 (blob/data URLs and file drops) or an http(s) URL that this
+ * offscreen document fetches itself.
+ * @param {{ bufferB64?: string, url?: string }} message
+ * @returns {Promise<ArrayBuffer>}
+ */
+async function resolveImageBytes(message) {
+  if (typeof message.bufferB64 === 'string' && message.bufferB64.length > 0) {
+    const bytes = base64ToBytes(message.bufferB64);
+    if (bytes.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error('Image exceeds size cap');
+    }
+    if (bytes.byteLength === 0) {
+      throw new Error('Empty image payload');
+    }
+    return bytes.buffer;
+  }
+
+  if (typeof message.url === 'string' && /^https?:\/\//i.test(message.url)) {
+    return fetchImageBytes(message.url);
+  }
+
+  throw new Error('No image bytes received (missing bufferB64 and non-http URL)');
+}
+
+async function classifyImage(bytes, url, customThreshold) {
+  if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0) {
+    throw new Error('No image bytes to analyze');
+  }
   const heuristics = await analyzeHeuristics(bytes, url);
 
   let neuralPAi = 0.5;
@@ -125,7 +180,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       if (message.type === 'analyze') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
-        const result = await classifyImage(message.buffer, message.url || '', message.threshold);
+        const bytes = await resolveImageBytes(message);
+        const result = await classifyImage(bytes, message.url || '', message.threshold);
         sendResponse({ ok: true, result });
         return;
       }

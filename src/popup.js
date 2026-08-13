@@ -1,3 +1,5 @@
+import { bytesToBase64 } from './bytes.js';
+
 const thresholdEl = document.getElementById('threshold');
 const thresholdVal = document.getElementById('thresholdVal');
 const enabledEl = document.getElementById('enabled');
@@ -75,7 +77,7 @@ async function analyzeFile(file) {
     type: 'analyze-buffer',
     requestId: `popup-${Date.now()}`,
     url: file.name,
-    buffer,
+    bufferB64: bytesToBase64(buffer),
     width: 256,
     height: 256,
     source: 'popup',
