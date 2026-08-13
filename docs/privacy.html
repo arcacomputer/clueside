@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy | Hybrid AI Image Detector</title>
+  <style>
+    body {
+      margin: 0 auto;
+      max-width: 40rem;
+      padding: 2rem 1.25rem 4rem;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.5;
+      color: #1a1a1a;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.15rem; margin-top: 1.75rem; }
+    .meta { color: #555; font-size: 0.9rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; }
+    th { background: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p class="meta">
+    Hybrid AI Image Detector<br />
+    Author: Luis Felipe Abarca<br />
+    License: MIT<br />
+    Last updated: August 2026
+  </p>
+
+  <h2>Summary</h2>
+  <p>
+    This Chrome extension analyzes images entirely on your device. Image bytes are not uploaded
+    to any server for inference, storage, or analytics.
+  </p>
+
+  <h2>What stays on your device</h2>
+  <ul>
+    <li>Webpage images fetched so pixels can be decoded locally</li>
+    <li>Files you drop into the toolbar popup</li>
+    <li>Model inference (WebGPU or WASM in an offscreen document)</li>
+    <li>Metadata parsing (C2PA, EXIF, embedded text)</li>
+    <li>Settings (threshold, enable, auto-scan) in <code>chrome.storage.sync</code></li>
+  </ul>
+
+  <h2>What may use the network</h2>
+  <ul>
+    <li>
+      <strong>Packaged model (store or full zip):</strong> CommunityForensics ONNX weights ship
+      inside the extension package. After install, inference does not need the network.
+    </li>
+    <li>
+      <strong>Optional one-time Hugging Face download:</strong> if weight files are missing at
+      setup, the offscreen document may download them once from Hugging Face into Cache Storage.
+      After that, the extension does not download model weights again.
+    </li>
+    <li>
+      Ordinary page loads still use the site's own network traffic. This extension does not add
+      cloud inference calls and does not send image pixels to a backend.
+    </li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <table>
+    <thead>
+      <tr><th>Permission</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>host_permissions / all_urls</td>
+        <td>Fetch page image URLs so pixels can be decoded without canvas taint. Local analysis only.</td>
+      </tr>
+      <tr>
+        <td>offscreen</td>
+        <td>Run ONNX inference in a document with canvas, WebGPU, or WASM.</td>
+      </tr>
+      <tr>
+        <td>storage</td>
+        <td>Save your threshold and toggles.</td>
+      </tr>
+      <tr>
+        <td>unlimitedStorage</td>
+        <td>Hold the on-device ~83MB ONNX weights. Not used to upload images.</td>
+      </tr>
+      <tr>
+        <td>activeTab</td>
+        <td>Let the popup talk to the current tab when you drop a file or change settings.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Data we do not collect</h2>
+  <ul>
+    <li>No analytics</li>
+    <li>No image uploads</li>
+    <li>No account system</li>
+    <li>No external inference APIs</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>This extension does not knowingly collect personal information from anyone, including children.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the date at the top of this page will be updated.</p>
+
+  <h2>Contact</h2>
+  <p>
+    Source and issues: the project GitHub repository listed with the extension.
+    Author: Luis Felipe Abarca. License: MIT.
+  </p>
+</body>
+</html>

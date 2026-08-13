@@ -35,6 +35,17 @@ npm run build
 
 On first run, if `models/` is missing from the packed extension, the offscreen worker can download weights once into Cache Storage, then stays offline.
 
+## Chrome Web Store zip (optional)
+
+Unpacked GitHub install is the POIDH path. A store zip is extra packaging. This project is not claimed to be listed on the Chrome Web Store.
+
+```bash
+npm ci
+npm run package
+```
+
+`package` runs `fetch-model` and `build`, then writes `release/hybrid-ai-image-detector-1.0.0.zip` with bundled WASM and the CommunityForensics FP32 ONNX so a store install works offline. See `STORE.md` for listing copy, permission justifications, screenshot sizes, and review-time notes. Host `docs/privacy.html` on HTTPS for the store privacy-policy URL.
+
 ## Usage
 
 - Browse any page: large images (96px or wider/taller) get a badge after analysis.
@@ -72,7 +83,7 @@ See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `n
 
 ## Privacy
 
-See [PRIVACY.md](PRIVACY.md). Short version: images are decoded and analyzed locally. Nothing is uploaded.
+See [PRIVACY.md](PRIVACY.md) and [docs/privacy.html](docs/privacy.html). Short version: images are decoded and analyzed locally. Nothing is uploaded.
 
 ## Model credit
 

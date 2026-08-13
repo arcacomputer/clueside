@@ -25,9 +25,7 @@ const REQUIRED_WASM = [
 
 const OPTIONAL_WASM = [
   'ort-wasm-simd-threaded.jsep.wasm',
-  'ort-wasm-simd-threaded.asyncify.wasm',
   'ort-wasm-simd-threaded.jsep.mjs',
-  'ort-wasm-simd-threaded.asyncify.mjs',
 ];
 
 async function mustExist(path, label) {
@@ -90,12 +88,17 @@ async function copyStatic() {
     await cp(join(ROOT, 'icons', `icon${size}.png`), join(DIST, `icons/icon${size}.png`));
   }
 
-  const srcModels = join(ROOT, 'models');
+  const srcModels = join(ROOT, 'models', 'buildborderless', 'CommunityForensics-DeepfakeDet-ViT');
+  const destModels = join(MODELS, 'buildborderless', 'CommunityForensics-DeepfakeDet-ViT');
   try {
-    await cp(srcModels, MODELS, { recursive: true });
-  } catch {
-    await mkdir(MODELS, { recursive: true });
-    console.warn('Warning: models/ missing. Run npm run fetch-model before loading the extension.');
+    await mustExist(join(srcModels, 'onnx', 'model.onnx'), 'CommunityForensics onnx/model.onnx');
+    await cp(srcModels, destModels, { recursive: true });
+  } catch (err) {
+    await mkdir(destModels, { recursive: true });
+    console.warn(
+      'Warning: CommunityForensics weights missing. Run npm run fetch-model before loading or packaging.'
+    );
+    if (process.env.REQUIRE_MODEL === '1') throw err;
   }
 }
 

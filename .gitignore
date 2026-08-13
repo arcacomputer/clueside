@@ -3,6 +3,8 @@ dist/
 models/*.onnx
 models/**/*.onnx
 eval/fixtures/
+release/
+*.zip
 .DS_Store
 *.log
 .env
