@@ -1,27 +1,19 @@
-import { env, pipeline } from '@huggingface/transformers';
-import { analyzeHeuristics, neuralPAiFromClassification, topGeneratorHint } from './heuristics.js';
+import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
+import { preprocessBitmap } from './clip-preprocess.js';
+import {
+  createCommunityForensicsSession,
+  predictCHW,
+  MODEL_ID,
+  MODEL_ONNX_PATH,
+} from './community-forensics.js';
 
-const MODEL_ID = 'onnx-community/ai-source-detector-ONNX';
 const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
-const HF_FILES = [
-  'onnx/model_quantized.onnx',
-  'config.json',
-  'preprocessor_config.json',
-];
+const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
 
-let classifier = null;
+let session = null;
 let initError = null;
 let threshold = DEFAULT_THRESHOLD;
-
-function configureEnv() {
-  env.allowRemoteModels = false;
-  env.allowLocalModels = true;
-  env.localModelPath = chrome.runtime.getURL('models/');
-  env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('lib/');
-  env.useBrowserCache = false;
-  env.useCustomCache = false;
-}
 
 async function modelFilesPresent() {
   const checks = HF_FILES.map(async (file) => {
@@ -29,8 +21,7 @@ async function modelFilesPresent() {
     const res = await fetch(url, { method: 'HEAD' });
     return res.ok;
   });
-  const results = await Promise.all(checks);
-  return results.every(Boolean);
+  return (await Promise.all(checks)).every(Boolean);
 }
 
 async function downloadToCacheStorage() {
@@ -50,33 +41,22 @@ async function downloadToCacheStorage() {
   }
 }
 
-async function ensureClassifier() {
-  if (classifier) return classifier;
+async function ensureSession() {
+  if (session) return session;
   if (initError) throw initError;
 
-  configureEnv();
-
-  const localReady = await modelFilesPresent();
-  if (!localReady) {
-    try {
-      await downloadToCacheStorage();
-      env.allowRemoteModels = true;
-      env.remoteModelPath = `https://huggingface.co/${MODEL_ID}/resolve/main`;
-    } catch (err) {
-      initError = err;
-      throw err;
-    }
-  }
-
-  const device = navigator.gpu ? 'webgpu' : 'wasm';
-
   try {
-    classifier = await pipeline('image-classification', MODEL_ID, {
-      device,
-      dtype: 'q8',
+    if (!(await modelFilesPresent())) {
+      await downloadToCacheStorage();
+    }
+
+    const modelUrl = chrome.runtime.getURL(`models/${MODEL_ID}/${MODEL_ONNX_PATH}`);
+    session = await createCommunityForensicsSession({
+      modelUrl,
+      wasmPaths: chrome.runtime.getURL('lib/'),
+      useWebGpu: Boolean(navigator.gpu),
     });
-    env.allowRemoteModels = false;
-    return classifier;
+    return session;
   } catch (err) {
     initError = err;
     throw err;
@@ -88,20 +68,18 @@ async function classifyImage(buffer, url, customThreshold) {
   const heuristics = await analyzeHeuristics(bytes, url);
 
   let neuralPAi = 0.5;
-  let generatorHint = null;
   let modelError = null;
 
   try {
-    const pipe = await ensureClassifier();
+    const activeSession = await ensureSession();
     const mime = sniffMime(bytes);
     const blob = new Blob([bytes], { type: mime });
-    const objectUrl = URL.createObjectURL(blob);
+    const bitmap = await createImageBitmap(blob);
     try {
-      const outputs = await pipe(objectUrl);
-      neuralPAi = neuralPAiFromClassification(outputs);
-      generatorHint = topGeneratorHint(outputs);
+      const chw = await preprocessBitmap(bitmap);
+      neuralPAi = await predictCHW(activeSession, chw);
     } finally {
-      URL.revokeObjectURL(objectUrl);
+      bitmap.close();
     }
   } catch (err) {
     modelError = err.message || String(err);
@@ -116,7 +94,7 @@ async function classifyImage(buffer, url, customThreshold) {
 
   return {
     ...fused,
-    generatorHint,
+    generatorHint: null,
     modelError,
     url,
   };
@@ -129,15 +107,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message.type === 'init') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
-        await ensureClassifier();
+        await ensureSession();
         sendResponse({ ok: true, device: navigator.gpu ? 'webgpu' : 'wasm' });
         return;
       }
 
       if (message.type === 'analyze') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
-        const buffer = message.buffer;
-        const result = await classifyImage(buffer, message.url || '', message.threshold);
+        const result = await classifyImage(message.buffer, message.url || '', message.threshold);
         sendResponse({ ok: true, result });
         return;
       }

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Download ai-source-detector ONNX weights and config at build time.
- * After this script runs, the unpacked extension works fully offline.
+ * Download CommunityForensics ONNX weights at build time.
  */
 
 import { mkdir, writeFile, access } from 'node:fs/promises';
@@ -12,16 +11,12 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const MODELS_DIR = join(ROOT, 'models', 'onnx-community', 'ai-source-detector-ONNX');
 
-const REPO = 'onnx-community/ai-source-detector-ONNX';
+const REPO = 'buildborderless/CommunityForensics-DeepfakeDet-ViT';
+const MODEL_DIR = join(ROOT, 'models', REPO);
 const BASE = `https://huggingface.co/${REPO}/resolve/main`;
 
-const FILES = [
-  'onnx/model_quantized.onnx',
-  'config.json',
-  'preprocessor_config.json',
-];
+const FILES = ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'];
 
 async function exists(path) {
   try {
@@ -43,12 +38,12 @@ async function download(url, dest) {
 }
 
 async function main() {
-  await mkdir(MODELS_DIR, { recursive: true });
+  await mkdir(MODEL_DIR, { recursive: true });
 
   for (const file of FILES) {
-    const dest = join(MODELS_DIR, file);
+    const dest = join(MODEL_DIR, file);
     if (await exists(dest)) {
-      console.log(`Already present: ${file}`);
+      console.log(`Already present: ${REPO}/${file}`);
       continue;
     }
     await download(`${BASE}/${file}`, dest);
@@ -56,11 +51,12 @@ async function main() {
 
   const manifest = {
     id: REPO,
-    dtype: 'q8',
-    onnx: 'onnx/model_quantized.onnx',
+    dtype: 'fp32',
+    onnx: 'onnx/model.onnx',
+    inputSize: 384,
     fetchedAt: new Date().toISOString(),
   };
-  await writeFile(join(MODELS_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await writeFile(join(MODEL_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
   console.log('Model fetch complete.');
 }
 
