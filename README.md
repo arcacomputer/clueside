@@ -1,6 +1,6 @@
 # Hybrid AI Image Detector
 
-Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM. Images never leave your device.
+Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Images never leave your device; after install the extension performs no network requests at all.
 
 **Author:** Luis Felipe Abarca  
 **License:** MIT
@@ -12,8 +12,9 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 1. Download the zip from [Releases](https://github.com/felirami/hybrid-ai-image-detector/releases/latest).
 2. Extract it.
 3. Open `chrome://extensions` (same on Mac, Windows, and Linux), enable **Developer mode**, click **Load unpacked**, and select the extracted folder. `manifest.json` is at the root of that folder.
+4. Optional: in the extension's Details page, enable **Allow access to file URLs** if you want badges on `file://` pages (local image galleries). Images there are scored from the rendered pixels; no network is involved either way.
 
-The zip already includes CommunityForensics ONNX weights. No extra download. Inference uses WebGPU when Chrome exposes an adapter, otherwise WASM. WebGPU is not required.
+The zip already includes both model weights (CommunityForensics and DINOv2-small + probe). No extra download. Inference uses WebGPU when Chrome exposes an adapter, otherwise WASM. WebGPU is not required.
 
 ### From source
 
@@ -37,10 +38,13 @@ Maintainers cut a release with `git tag v1.0.0 && git push origin v1.0.0`. That 
 
 ## How scoring works
 
-1. **Neural:** CommunityForensics ViT-Small official FP32 ONNX (CLIP 384). `p(AI) = sigmoid(logit)`. Default threshold is raw 65% with no remapping.
-2. **Adaptive TTA:** score the official shortest-edge 440 center crop first. Extra views (440 corners plus a 512 center crop) run only when that center p(AI) is in `[0.15, 0.65)` and few images are waiting. If more than four images are still pending, only the center crop runs so a masonry page does not starve WASM. Take `Math.max` of those sigmoids. Stop early if any crop is `>= 0.9`. No 0.5-to-0.65 remap and no logit bias.
-3. **Metadata:** C2PA, EXIF/XMP/IPTC, generator text in PNG/JPEG, weak URL hints. A URL hint alone cannot cross 65%.
-4. **Fusion:** Strong metadata forces 0.95-0.99. Otherwise neural score plus weak bonuses.
+Two independent neural heads cover complementary failure modes, plus deterministic metadata:
+
+1. **CommunityForensics head:** ViT-Small official FP32 ONNX (CLIP 384). `p(AI) = sigmoid(logit)`. Near-zero false positives on real photos, but under-scores several modern generators (Flux, GPT-4o-image, photoreal DALL-E 3).
+2. **DINOv2 probe head:** frozen DINOv2-small backbone (224 center view) with a transparent logistic head over CLS+mean-pooled features (`models/probe/dino-probe.json`: plain standardize/weights/bias, no lookup tables). Trained on ~9.6k images from public datasets across Flux, SD3.5, SDXL-era, Midjourney, DALL-E 3, GPT-4o-image and diverse real photos, with web-realistic JPEG/resize augmentation. This head carries the modern generators.
+3. **Neural fusion:** `max(cf, dino)`, meaning "either detector fired". Displayed confidence is this raw fused probability; the AI verdict stays at raw `>= 0.65` with no remapping and no logit bias.
+4. **Adaptive TTA:** the DINO pass and the official 440 center crop always run. Extra CommunityForensics views (440 corners + 512 center) run only when a head is at least mildly suspicious (CF center or DINO in `[0.15, 0.65)`), so confident reals cost two passes total. `Math.max` of sigmoids, early exit at `>= 0.9`. Under heavy queue load (more than 12 pending) CF drops to center-only; the DINO pass still runs.
+5. **Metadata:** C2PA, EXIF/XMP/IPTC, generator text in PNG/JPEG, weak URL hints. Strong metadata forces 0.95-0.99; a URL hint alone cannot cross 65%.
 
 ## Tests
 
@@ -50,12 +54,16 @@ npm test
 
 Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. See `eval/README.md`. Public n=19 fixture numbers are not a private-benchmark claim.
 
+## Local benchmark
+
+RESULTS_PLACEHOLDER
+
 ## Limitations
 
-- Photoreal DALL-E 3 can still score below 65%. On the Wikimedia copies of the named fixture gens, `crying-robot` center 0.236 is in the TTA band and extra crops reach 0.985; `pluto` center 0.137 stays a miss (other crops were lower). Confident-real centers below 0.15 skip extra crops. CommunityForensics FP32 stays the head. Not 75% on the private POIDH benchmark.
-- CORS-blocked images, tiny thumbnails, and new generators with stripped metadata are weaker or skipped.
+- Local-bench numbers are not a claim about any private benchmark; distribution shift is real.
+- Tiny thumbnails (below 96px) are skipped. Images whose bytes cannot be fetched are scored from the already-decoded pixels on the page when the canvas is readable; otherwise they show `skip`.
 - Camera Make/Model in EXIF is not proof of a real photo.
-- On CPU/WASM, the first scan of a page with dozens of photos can take tens of seconds. Badges stay on `...` until that image is fetched and scored. They are not marked Timed out for waiting in the queue.
+- On CPU/WASM, the first scan of a page with dozens of photos can take tens of seconds (less with multithreaded WASM, which Chrome enables when the extension pages are cross-origin isolated). Badges stay on `...` until that image is fetched and scored. They are not marked Timed out for waiting in the queue.
 
 ## Privacy
 
@@ -63,4 +71,15 @@ See [PRIVACY.md](PRIVACY.md) and [docs/privacy.html](docs/privacy.html). Images 
 
 ## Model credit
 
-[buildborderless/CommunityForensics-DeepfakeDet-ViT](https://huggingface.co/buildborderless/CommunityForensics-DeepfakeDet-ViT) (MIT). Use official FP32 `onnx/model.onnx`, not onnx-community auto-converted q8.
+- [buildborderless/CommunityForensics-DeepfakeDet-ViT](https://huggingface.co/buildborderless/CommunityForensics-DeepfakeDet-ViT) (MIT). Use official FP32 `onnx/model.onnx`, not onnx-community auto-converted q8.
+- [Xenova/dinov2-small](https://huggingface.co/Xenova/dinov2-small): ONNX conversion of Meta AI's [DINOv2](https://github.com/facebookresearch/dinov2) (Apache-2.0). The logistic probe head on top is trained in this repo (`eval/fetch-train.mjs`, `eval/extract-features.mjs`, `eval/train-probe.mjs`) and ships as `models/probe/dino-probe.json` (MIT).
+
+## Reproducing the probe head
+
+```bash
+node eval/fetch-train.mjs /tmp/train      # ~9.6k images from public HF datasets
+node eval/extract-features.mjs /tmp/train models/Xenova/dinov2-small/onnx/model.onnx /tmp/feat-train --augment
+node eval/train-probe.mjs /tmp/feat-train models/probe/dino-probe.json
+```
+
+The head is a linear probe (768 weights + bias + feature mean/std) over frozen DINOv2 features; the JSON is human-auditable. No benchmark images, hashes, or lookup tables are involved.

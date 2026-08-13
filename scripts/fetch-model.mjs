@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Download CommunityForensics ONNX weights at build time.
+ * Download ONNX weights at build time: CommunityForensics ViT (primary
+ * head) and DINOv2-small (backbone for the probe head). Everything is
+ * bundled into the extension; the installed extension never downloads
+ * anything at runtime.
  */
 
 import { mkdir, writeFile, access } from 'node:fs/promises';
@@ -12,11 +15,18 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-const REPO = 'buildborderless/CommunityForensics-DeepfakeDet-ViT';
-const MODEL_DIR = join(ROOT, 'models', REPO);
-const BASE = `https://huggingface.co/${REPO}/resolve/main`;
-
-const FILES = ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'];
+const MODELS = [
+  {
+    repo: 'buildborderless/CommunityForensics-DeepfakeDet-ViT',
+    files: ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'],
+    manifest: { dtype: 'fp32', onnx: 'onnx/model.onnx', inputSize: 384 },
+  },
+  {
+    repo: 'Xenova/dinov2-small',
+    files: ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'],
+    manifest: { dtype: 'fp32', onnx: 'onnx/model.onnx', inputSize: 224 },
+  },
+];
 
 async function exists(path) {
   try {
@@ -38,25 +48,26 @@ async function download(url, dest) {
 }
 
 async function main() {
-  await mkdir(MODEL_DIR, { recursive: true });
+  for (const model of MODELS) {
+    const modelDir = join(ROOT, 'models', model.repo);
+    const base = `https://huggingface.co/${model.repo}/resolve/main`;
+    await mkdir(modelDir, { recursive: true });
 
-  for (const file of FILES) {
-    const dest = join(MODEL_DIR, file);
-    if (await exists(dest)) {
-      console.log(`Already present: ${REPO}/${file}`);
-      continue;
+    for (const file of model.files) {
+      const dest = join(modelDir, file);
+      if (await exists(dest)) {
+        console.log(`Already present: ${model.repo}/${file}`);
+        continue;
+      }
+      await download(`${base}/${file}`, dest);
     }
-    await download(`${BASE}/${file}`, dest);
+
+    await writeFile(
+      join(modelDir, 'manifest.json'),
+      JSON.stringify({ id: model.repo, ...model.manifest, fetchedAt: new Date().toISOString() }, null, 2)
+    );
   }
 
-  const manifest = {
-    id: REPO,
-    dtype: 'fp32',
-    onnx: 'onnx/model.onnx',
-    inputSize: 384,
-    fetchedAt: new Date().toISOString(),
-  };
-  await writeFile(join(MODEL_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
   console.log('Model fetch complete.');
 }
 

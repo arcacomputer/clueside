@@ -136,6 +136,7 @@ export function imageDataToCHW(imageData) {
 function cropCanvas(sourceCanvas, sx, sy) {
   const crop = new OffscreenCanvas(CROP_SIZE, CROP_SIZE);
   const cropCtx = crop.getContext('2d', { willReadFrequently: true });
+  // 1:1 blit; smoothing settings are irrelevant here but harmless.
   cropCtx.drawImage(sourceCanvas, sx, sy, CROP_SIZE, CROP_SIZE, 0, 0, CROP_SIZE, CROP_SIZE);
   return imageDataToCHW(cropCtx.getImageData(0, 0, CROP_SIZE, CROP_SIZE));
 }
@@ -143,6 +144,12 @@ function cropCanvas(sourceCanvas, sx, sy) {
 function resizeBitmapCanvas(bitmap, resizedW, resizedH) {
   const resizeCanvas = new OffscreenCanvas(resizedW, resizedH);
   const resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
+  // The model was trained on PIL bicubic (resample=3). Chrome's default
+  // imageSmoothingQuality 'low' is bilinear and visibly changes the
+  // texture statistics CommunityForensics keys on; 'high' is the
+  // closest canvas filter to the training-time resize.
+  resizeCtx.imageSmoothingEnabled = true;
+  resizeCtx.imageSmoothingQuality = 'high';
   resizeCtx.drawImage(bitmap, 0, 0, resizedW, resizedH);
   return resizeCanvas;
 }

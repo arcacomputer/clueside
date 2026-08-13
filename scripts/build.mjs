@@ -88,16 +88,32 @@ async function copyStatic() {
     await cp(join(ROOT, 'icons', `icon${size}.png`), join(DIST, `icons/icon${size}.png`));
   }
 
-  const srcModels = join(ROOT, 'models', 'buildborderless', 'CommunityForensics-DeepfakeDet-ViT');
-  const destModels = join(MODELS, 'buildborderless', 'CommunityForensics-DeepfakeDet-ViT');
+  const modelDirs = [
+    ['buildborderless', 'CommunityForensics-DeepfakeDet-ViT'],
+    ['Xenova', 'dinov2-small'],
+  ];
+
+  for (const parts of modelDirs) {
+    const srcModels = join(ROOT, 'models', ...parts);
+    const destModels = join(MODELS, ...parts);
+    try {
+      await mustExist(join(srcModels, 'onnx', 'model.onnx'), `${parts.join('/')} onnx/model.onnx`);
+      await cp(srcModels, destModels, { recursive: true });
+    } catch (err) {
+      await mkdir(destModels, { recursive: true });
+      console.warn(
+        `Warning: ${parts.join('/')} weights missing. Run npm run fetch-model before loading or packaging.`
+      );
+      if (process.env.REQUIRE_MODEL === '1') throw err;
+    }
+  }
+
+  const probeSrc = join(ROOT, 'models', 'probe', 'dino-probe.json');
   try {
-    await mustExist(join(srcModels, 'onnx', 'model.onnx'), 'CommunityForensics onnx/model.onnx');
-    await cp(srcModels, destModels, { recursive: true });
+    await mustExist(probeSrc, 'models/probe/dino-probe.json');
+    await cp(probeSrc, join(MODELS, 'probe', 'dino-probe.json'));
   } catch (err) {
-    await mkdir(destModels, { recursive: true });
-    console.warn(
-      'Warning: CommunityForensics weights missing. Run npm run fetch-model before loading or packaging.'
-    );
+    console.warn('Warning: dino-probe.json missing; DINO head will be disabled in this build.');
     if (process.env.REQUIRE_MODEL === '1') throw err;
   }
 }

@@ -1,5 +1,6 @@
+import * as ort from 'onnxruntime-web';
 import { analyzeHeuristics } from './heuristics.js';
-import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
+import { fuseScores, fuseNeuralScores, DEFAULT_THRESHOLD } from './fuse.js';
 import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import {
@@ -11,6 +12,15 @@ import {
   MODEL_ID,
   MODEL_ONNX_PATH,
 } from './community-forensics.js';
+import {
+  DINO_MODEL_ID,
+  DINO_ONNX_PATH,
+  DINO_INPUT_NAME,
+  DINO_CROP_SIZE,
+  dinoPreprocessBitmap,
+  dinoScoreHiddenState,
+} from './dino.js';
+import { TTA_ADAPTIVE_LOW } from './scoring.js';
 import { FETCH_TIMEOUT_MS, INFERENCE_TIMEOUT_MS } from './analyze-retry.js';
 import {
   createExclusiveLock,
@@ -18,16 +28,29 @@ import {
   runExclusiveAfterStart,
 } from './analyze-queue.js';
 
-const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const PROBE_URL_PATH = 'models/probe/dino-probe.json';
 
 let session = null;
 let sessionDevice = 'wasm';
+let dinoSession = null;
+let dinoProbe = null;
 let initError = null;
 let sessionPromise = null;
 let threshold = DEFAULT_THRESHOLD;
 const inferLock = createExclusiveLock();
+
+/**
+ * Multithreaded WASM needs SharedArrayBuffer, which needs the COOP/COEP
+ * headers declared in manifest.json. Feature-detect so a Chrome that
+ * does not isolate extension pages still works on one thread.
+ */
+function wasmThreadCount() {
+  if (!globalThis.crossOriginIsolated) return 1;
+  const cores = navigator.hardwareConcurrency || 2;
+  return Math.max(1, Math.min(4, cores - 1));
+}
 
 async function modelFileReachable(file) {
   const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
@@ -39,20 +62,32 @@ async function modelFilesPresent() {
   return checks.every(Boolean);
 }
 
-async function downloadToCacheStorage() {
-  const base = `https://huggingface.co/${MODEL_ID}/resolve/main`;
-  const cache = await caches.open(HF_CACHE_NAME);
+/**
+ * The DINOv2 head is optional at runtime: if its assets are missing the
+ * extension degrades to CommunityForensics-only instead of failing.
+ */
+async function tryCreateDinoHead() {
+  try {
+    const probeRes = await fetch(chrome.runtime.getURL(PROBE_URL_PATH));
+    if (!probeRes.ok) throw new Error(`probe fetch ${probeRes.status}`);
+    const probe = await probeRes.json();
 
-  for (const file of HF_FILES) {
-    const url = `${base}/${file}`;
-    const cached = await cache.match(url);
-    if (cached) continue;
+    const modelUrl = chrome.runtime.getURL(`models/${DINO_MODEL_ID}/${DINO_ONNX_PATH}`);
+    if (!(await assetReachable(modelUrl))) throw new Error('dino model missing');
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to download ${file}: ${res.status}`);
-    }
-    await cache.put(url, res.clone());
+    const created = await ort.InferenceSession.create(modelUrl, {
+      executionProviders: sessionDevice === 'webgpu' ? ['webgpu'] : ['wasm'],
+    }).catch(() =>
+      ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] })
+    );
+
+    dinoSession = created;
+    dinoProbe = probe;
+    console.log('DINOv2 probe head ready');
+  } catch (err) {
+    console.warn('DINOv2 head unavailable, running CommunityForensics only:', err?.message || err);
+    dinoSession = null;
+    dinoProbe = null;
   }
 }
 
@@ -63,10 +98,10 @@ async function ensureSession() {
 
   sessionPromise = (async () => {
     if (!(await modelFilesPresent())) {
-      await downloadToCacheStorage();
-      if (!(await modelFilesPresent())) {
-        throw new Error('Model weights missing. Run npm run fetch-model and rebuild.');
-      }
+      // All weights ship inside the extension (release zip / fetch-model
+      // at build time). There is deliberately no runtime download path:
+      // after install the extension never touches the network.
+      throw new Error('Model weights missing. Run npm run fetch-model and rebuild.');
     }
 
     const modelUrl = chrome.runtime.getURL(`models/${MODEL_ID}/${MODEL_ONNX_PATH}`);
@@ -75,10 +110,14 @@ async function ensureSession() {
       modelUrl,
       wasmPaths: chrome.runtime.getURL('lib/'),
       preferWebGpu: Boolean(adapter),
+      numThreads: wasmThreadCount(),
     });
 
     session = created.session;
     sessionDevice = created.device;
+
+    await tryCreateDinoHead();
+
     return created;
   })();
 
@@ -88,6 +127,23 @@ async function ensureSession() {
     initError = err;
     sessionPromise = null;
     throw err;
+  }
+}
+
+/**
+ * @param {ImageBitmap} bitmap
+ * @returns {Promise<number|null>} p(AI) from the DINOv2 probe, or null
+ */
+async function dinoScore(bitmap) {
+  if (!dinoSession || !dinoProbe) return null;
+  try {
+    const chw = dinoPreprocessBitmap(bitmap);
+    const input = new ort.Tensor('float32', chw, [1, 3, DINO_CROP_SIZE, DINO_CROP_SIZE]);
+    const outputs = await dinoSession.run({ [DINO_INPUT_NAME]: input });
+    return dinoScoreHiddenState(outputs.last_hidden_state, dinoProbe);
+  } catch (err) {
+    console.warn('DINO head inference failed:', err?.message || err);
+    return null;
   }
 }
 
@@ -161,6 +217,7 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   const bytes = toArrayBuffer(rawBytes);
   const heuristics = await analyzeHeuristics(bytes, url);
   const mode = normalizeTtaMode(ttaMode);
+  const activeThreshold = customThreshold ?? threshold;
 
   let neuralPAi = 0.5;
   let modelError = null;
@@ -171,13 +228,27 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
     try {
-      if (mode === 'center') {
+      // DINO head first: one cheap 224 pass that carries the modern
+      // generators CF under-scores. If it is already confident, CF's
+      // extra TTA crops cannot change the decision (fusion is max).
+      const dinoPAi = await dinoScore(bitmap);
+      const dinoDecided = dinoPAi != null && dinoPAi >= activeThreshold;
+
+      let cfPAi;
+      if (mode === 'center' || dinoDecided) {
         const chw = await preprocessBitmap(bitmap);
-        neuralPAi = await predictCHW(activeSession, chw);
+        cfPAi = await predictCHW(activeSession, chw);
       } else {
+        // A suspicious dino score widens CF's TTA band to [0, t): CF
+        // corner/512 crops rescue photoreal cases whose center crop
+        // scores near zero, but only run when some head saw something.
         const views = await preprocessBitmapViews(bitmap);
-        neuralPAi = (await predictAdaptiveViews(activeSession, views, { mode })).neuralPAi;
+        const dinoSuspicious = dinoPAi != null && dinoPAi >= TTA_ADAPTIVE_LOW;
+        const effectiveMode = mode === 'adaptive' && dinoSuspicious ? 'always' : mode;
+        cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
       }
+
+      neuralPAi = fuseNeuralScores(cfPAi, dinoPAi);
     } finally {
       bitmap.close();
     }
@@ -190,7 +261,7 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
     }
   }
 
-  const fused = fuseScores(neuralPAi, heuristics, customThreshold ?? threshold);
+  const fused = fuseScores(neuralPAi, heuristics, activeThreshold);
 
   return {
     ...fused,

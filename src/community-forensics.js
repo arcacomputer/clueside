@@ -197,7 +197,7 @@ export async function predictAdaptiveViews(session, views, options = {}) {
 export async function createCommunityForensicsSession(options) {
   configureOrtLogging();
   ort.env.wasm.wasmPaths = options.wasmPaths;
-  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.numThreads = options.numThreads ?? 1;
 
   if (options.verifyWasmAssets !== false) {
     await verifyWasmAssets(options.wasmPaths);

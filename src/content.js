@@ -10,6 +10,7 @@ import {
 } from './analyze-retry.js';
 import { createAnalyzeQueue } from './analyze-queue.js';
 import { pickImageUrl } from './image-url.js';
+import { readElementPixels, shouldTryElementPixels } from './element-pixels.js';
 
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
@@ -216,7 +217,7 @@ async function analyzeHttpUrl(el, url, source, ttaMode) {
   const { width, height } = elementSize(el);
   ensureBadge(el);
 
-  const result = await withAnalyzeDeadline(
+  return withAnalyzeDeadline(
     () =>
       withRetries(async () => {
         const response = await chrome.runtime.sendMessage({
@@ -232,8 +233,6 @@ async function analyzeHttpUrl(el, url, source, ttaMode) {
       }),
     { timeoutMs: AFTER_START_SAFETY_MS, timeoutMessage: 'Inference timed out' }
   );
-
-  finalizeResult(el, result);
 }
 
 async function fetchBlobOrData(url) {
@@ -255,57 +254,85 @@ async function fetchBlobOrData(url) {
   }
 }
 
-async function analyzeBlobOrData(el, url, source, ttaMode) {
+async function sendBuffer(el, url, source, ttaMode, buffer) {
   const { width, height } = elementSize(el);
+  const bufferB64 = bytesToBase64(buffer);
+
+  return withAnalyzeDeadline(
+    () =>
+      withRetries(async () => {
+        const response = await chrome.runtime.sendMessage({
+          type: 'analyze-buffer',
+          requestId: uid(),
+          url,
+          bufferB64,
+          width,
+          height,
+          source,
+          ttaMode,
+        });
+        return response || { error: 'No response from extension' };
+      }),
+    { timeoutMs: AFTER_START_SAFETY_MS, timeoutMessage: 'Inference timed out' }
+  );
+}
+
+async function analyzeBlobOrData(el, url, source, ttaMode) {
   ensureBadge(el);
 
   try {
     const buffer = await fetchBlobOrData(url);
-    const bufferB64 = bytesToBase64(buffer);
-
-    const result = await withAnalyzeDeadline(
-      () =>
-        withRetries(async () => {
-          const response = await chrome.runtime.sendMessage({
-            type: 'analyze-buffer',
-            requestId: uid(),
-            url,
-            bufferB64,
-            width,
-            height,
-            source,
-            ttaMode,
-          });
-          return response || { error: 'No response from extension' };
-        }),
-      { timeoutMs: AFTER_START_SAFETY_MS, timeoutMessage: 'Inference timed out' }
-    );
-
-    finalizeResult(el, result);
+    return await sendBuffer(el, url, source, ttaMode, buffer);
   } catch (err) {
     const message = err?.message || 'Cannot read blob/data URL';
     if (isFetchSkipError(message)) {
-      renderBadge(el, toSkipResult(message));
-    } else {
-      renderBadge(el, { error: message });
+      return toSkipResult(message);
     }
-    markFinal(el);
+    return { error: message };
+  }
+}
+
+/**
+ * Rescue path: original bytes were unreachable (file:// gallery,
+ * offline re-fetch, credentialed CDN) but the browser already decoded
+ * the pixels. Re-encode them losslessly and score neural-only.
+ * Returns null when pixels are unreadable (tainted canvas) so the
+ * caller keeps the original skip result.
+ */
+async function analyzeElementPixels(el, url, source, ttaMode) {
+  if (!(el instanceof HTMLImageElement)) return null;
+
+  try {
+    const buffer = await readElementPixels(el);
+    const result = await sendBuffer(el, url, source, ttaMode, buffer);
+    if (result && !result.error && !result.skipped) {
+      return result;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
 async function runAnalyzeJob({ el, url, source }, { ttaMode }) {
+  let result;
+
   if (url.startsWith('blob:') || url.startsWith('data:')) {
-    await analyzeBlobOrData(el, url, source, ttaMode);
-    return;
+    result = await analyzeBlobOrData(el, url, source, ttaMode);
+  } else if (/^https?:\/\//i.test(url)) {
+    result = await analyzeHttpUrl(el, url, source, ttaMode);
+  } else {
+    // file:// and other schemes: bytes are not fetchable, but the
+    // rendered element still has pixels we can read below.
+    result = { skipped: true, reason: 'Unsupported URL scheme' };
   }
 
-  if (/^https?:\/\//i.test(url)) {
-    await analyzeHttpUrl(el, url, source, ttaMode);
-    return;
+  if (shouldTryElementPixels(result, isFetchSkipError)) {
+    const rescued = await analyzeElementPixels(el, url, source, ttaMode);
+    if (rescued) result = rescued;
   }
 
-  renderBadge(el, { skipped: true, reason: 'Unsupported URL scheme' });
-  markFinal(el);
+  finalizeResult(el, result);
 }
 
 const analyzeQueue = createAnalyzeQueue({

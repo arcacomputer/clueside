@@ -75,12 +75,13 @@ describe('createAnalyzeQueue', () => {
       },
     });
 
+    const jobCount = TTA_SKIP_WHEN_PENDING_ABOVE + 4;
     const jobs = [];
-    for (let i = 0; i < 8; i++) jobs.push(queue.enqueue(i));
+    for (let i = 0; i < jobCount; i++) jobs.push(queue.enqueue(i));
     await Promise.all(jobs);
 
-    assert.equal(modes.length, 8);
-    assert.equal(modes[0].pendingCount, 8);
+    assert.equal(modes.length, jobCount);
+    assert.equal(modes[0].pendingCount, jobCount);
     assert.equal(modes[0].ttaMode, 'center');
     assert.ok(modes[0].pendingCount > TTA_SKIP_WHEN_PENDING_ABOVE);
     const last = modes[modes.length - 1];

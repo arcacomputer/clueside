@@ -2,6 +2,7 @@ node_modules/
 dist/
 models/*.onnx
 models/**/*.onnx
+eval/parity/bundle.js
 eval/fixtures/
 release/
 *.zip

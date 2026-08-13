@@ -7,8 +7,15 @@
 
 export const ANALYZE_CONCURRENCY = 2;
 
-/** Pending count above this uses center crop only (no extra TTA views). */
-export const TTA_SKIP_WHEN_PENDING_ABOVE = 4;
+/**
+ * Pending count above this uses center crop only (no extra TTA views).
+ * The DINO head always runs (one cheap 224 pass), and CF extra crops
+ * are already gated on either head being suspicious, so a confident
+ * real costs one CF pass + one DINO pass regardless of mode. Measured
+ * on the local bench, shedding to center costs about 1 BA point
+ * (ens-max 93.8 -> ens-max-center 92.6), so shed late.
+ */
+export const TTA_SKIP_WHEN_PENDING_ABOVE = 12;
 
 export function ttaModeForLoad(pendingCount) {
   return pendingCount > TTA_SKIP_WHEN_PENDING_ABOVE ? 'center' : 'adaptive';

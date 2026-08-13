@@ -211,6 +211,19 @@ async function main() {
     );
   }
 
+  const DINO_ONNX = join(DIST, 'models', 'Xenova', 'dinov2-small', 'onnx', 'model.onnx');
+  const PROBE = join(DIST, 'models', 'probe', 'dino-probe.json');
+  if (!(await exists(DINO_ONNX)) || (await stat(DINO_ONNX)).size < MIN_ONNX_BYTES) {
+    throw new Error(
+      `Zip requires ${relative(ROOT, DINO_ONNX)} (~88MB FP32). Run npm run fetch-model before packaging.`
+    );
+  }
+  if (!(await exists(PROBE))) {
+    throw new Error(
+      `Zip requires ${relative(ROOT, PROBE)}. The DINO probe head must ship with the extension.`
+    );
+  }
+
   const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
   const zipName = `hybrid-ai-image-detector-${pkg.version}.zip`;
   const zipPath = join(RELEASE, zipName);
