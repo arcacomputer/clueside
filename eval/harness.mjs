@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { RawImage } from '@huggingface/transformers';
 import { analyzeHeuristics } from '../src/heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD, isAiAtThreshold } from '../src/fuse.js';
-import { preprocessRawImage } from '../src/clip-preprocess.js';
+import { preprocessRawImageViews } from '../src/clip-preprocess.js';
+import { TTA_MODES } from '../src/scoring.js';
 import {
   createCommunityForensicsSession,
-  predictCHW,
+  predictAdaptiveViews,
   MODEL_ID,
   MODEL_ONNX_PATH,
 } from '../src/community-forensics.js';
@@ -30,6 +31,26 @@ async function fileExists(path) {
   } catch {
     return false;
   }
+}
+
+function parseArgs(argv) {
+  let dir = '';
+  let ttaMode = 'adaptive';
+
+  for (const arg of argv) {
+    if (arg.startsWith('--tta=')) {
+      ttaMode = arg.slice('--tta='.length);
+    } else if (!arg.startsWith('-')) {
+      dir = resolve(arg);
+    }
+  }
+
+  if (!TTA_MODES.includes(ttaMode)) {
+    console.error(`Unknown --tta=${ttaMode}. Use ${TTA_MODES.join('|')}.`);
+    process.exit(1);
+  }
+
+  return { dir, ttaMode };
 }
 
 async function ensureSession() {
@@ -84,12 +105,13 @@ function balancedAccuracy(rows) {
   return { balanced: (tpr + tnr) / 2, tpr, tnr, ai: aiRows.length, real: realRows.length };
 }
 
-async function scoreFile(activeSession, filePath, label) {
+async function scoreFile(activeSession, filePath, label, ttaMode) {
   const buffer = await readFile(filePath);
   const heuristics = await analyzeHeuristics(buffer, filePath);
   const rawImage = await RawImage.read(filePath);
-  const chw = await preprocessRawImage(rawImage);
-  const neuralPAi = await predictCHW(activeSession, chw);
+  const views = await preprocessRawImageViews(rawImage);
+  const viewed = await predictAdaptiveViews(activeSession, views, { mode: ttaMode });
+  const neuralPAi = viewed.neuralPAi;
   const fused = fuseScores(neuralPAi, heuristics, DEFAULT_THRESHOLD);
 
   return {
@@ -99,14 +121,17 @@ async function scoreFile(activeSession, filePath, label) {
     neural_score: fused.neuralScore,
     verdict: fused.verdict,
     predicted_ai: isAiAtThreshold(fused.rawScore, DEFAULT_THRESHOLD),
+    extra_ran: viewed.extraRan,
+    early_exit: viewed.earlyExit,
+    view_max: viewed.named.map((v) => `${v.name}:${v.score.toFixed(3)}`).join('|'),
     reasons: fused.reasons.join('; '),
   };
 }
 
 async function main() {
-  const dir = resolve(process.argv[2] || '');
+  const { dir, ttaMode } = parseArgs(process.argv.slice(2));
   if (!dir) {
-    console.error('Usage: npm run eval -- <image-directory>');
+    console.error('Usage: npm run eval -- <image-directory> [--tta=adaptive|always|center]');
     console.error('');
     console.error('Point at a folder with labeled subdirectories, for example:');
     console.error('  dataset/real/*.jpg');
@@ -121,14 +146,16 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('file,label,raw_score,neural_score,verdict,predicted_ai,reasons');
+  console.log(
+    'file,label,raw_score,neural_score,verdict,predicted_ai,extra_ran,early_exit,views,reasons'
+  );
 
   const rows = [];
   for (const { path, label } of files) {
-    const row = await scoreFile(activeSession, path, label);
+    const row = await scoreFile(activeSession, path, label, ttaMode);
     rows.push(row);
     console.log(
-      `${row.file},${row.label || ''},${row.raw_score.toFixed(4)},${row.neural_score.toFixed(4)},${row.verdict},${row.predicted_ai},"${row.reasons}"`
+      `${row.file},${row.label || ''},${row.raw_score.toFixed(4)},${row.neural_score.toFixed(4)},${row.verdict},${row.predicted_ai},${row.extra_ran},${row.early_exit},"${row.view_max}","${row.reasons}"`
     );
   }
 
@@ -137,7 +164,9 @@ async function main() {
 
   console.log('');
   console.log(`Scored ${rows.length} image(s), ${labeledCount} with folder labels.`);
-  console.log(`Model: ${MODEL_ID} (CLIP 384, sigmoid logit). Threshold: raw p(AI) >= ${DEFAULT_THRESHOLD}.`);
+  console.log(
+    `Model: ${MODEL_ID} (official CLIP 384, TTA mode=${ttaMode}: max of 440 center+corners + 512 center). Threshold: raw p(AI) >= ${DEFAULT_THRESHOLD}.`
+  );
 
   if (metrics) {
     console.log(`Balanced accuracy: ${(metrics.balanced * 100).toFixed(2)}%`);

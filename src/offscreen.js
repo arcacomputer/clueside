@@ -1,10 +1,10 @@
 import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
-import { preprocessBitmap } from './clip-preprocess.js';
+import { preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import {
   createCommunityForensicsSession,
-  predictCHW,
+  predictAdaptiveViews,
   probeWebGpuAdapter,
   assetReachable,
   MODEL_ID,
@@ -147,8 +147,8 @@ async function classifyImage(rawBytes, url, customThreshold) {
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
     try {
-      const chw = await preprocessBitmap(bitmap);
-      neuralPAi = await predictCHW(activeSession, chw);
+      const views = await preprocessBitmapViews(bitmap);
+      neuralPAi = (await predictAdaptiveViews(activeSession, views)).neuralPAi;
     } finally {
       bitmap.close();
     }
