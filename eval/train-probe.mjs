@@ -45,8 +45,34 @@ async function loadData(prefix) {
   if (bin.length < expect) {
     throw new Error(`bin too small: ${bin.length} < ${expect}`);
   }
-  const feats = new Float32Array(bin.buffer, bin.byteOffset, metas.length * dims);
-  return { metas, feats, dims };
+  const raw = new Float32Array(bin.buffer, bin.byteOffset, metas.length * dims);
+
+  // Drop rows containing non-finite values (e.g. a decoder edge case):
+  // a single NaN row poisons the standardization statistics for every
+  // dimension and silently zeroes the model.
+  const keepMetas = [];
+  const keepRows = [];
+  for (let i = 0; i < metas.length; i++) {
+    let finite = true;
+    for (let d = 0; d < dims; d++) {
+      if (!Number.isFinite(raw[i * dims + d])) {
+        finite = false;
+        break;
+      }
+    }
+    if (finite) {
+      keepMetas.push(metas[i]);
+      keepRows.push(i);
+    }
+  }
+  if (keepMetas.length < metas.length) {
+    console.error(`dropped ${metas.length - keepMetas.length} non-finite feature row(s)`);
+  }
+  const feats = new Float32Array(keepMetas.length * dims);
+  keepRows.forEach((src, dst) => {
+    feats.set(raw.subarray(src * dims, (src + 1) * dims), dst * dims);
+  });
+  return { metas: keepMetas, feats, dims };
 }
 
 function trainLogistic(X, y, dims, n, opts = {}) {

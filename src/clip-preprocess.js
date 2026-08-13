@@ -107,11 +107,16 @@ export function packedRgbToCHW(data, channels) {
   const plane = CROP_SIZE * CROP_SIZE;
   const out = new Float32Array(3 * plane);
 
+  // Grayscale sources have channels < 3; replicate the single channel
+  // instead of reading past the pixel (which yields NaN).
+  const gOff = channels >= 3 ? 1 : 0;
+  const bOff = channels >= 3 ? 2 : 0;
+
   for (let i = 0; i < plane; i++) {
     const base = i * channels;
     const r = data[base] / 255;
-    const g = data[base + 1] / 255;
-    const b = data[base + 2] / 255;
+    const g = data[base + gOff] / 255;
+    const b = data[base + bOff] / 255;
 
     out[i] = (r - CLIP_MEAN[0]) / CLIP_STD[0];
     out[i + plane] = (g - CLIP_MEAN[1]) / CLIP_STD[1];

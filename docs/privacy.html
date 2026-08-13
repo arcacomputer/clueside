@@ -51,8 +51,13 @@
       <strong>Packaged models:</strong> both model weights (CommunityForensics ONNX and
       DINOv2-small ONNX with its probe head) ship inside the extension package. The weights are
       downloaded from Hugging Face at build/packaging time (<code>npm run fetch-model</code>),
-      never by the installed extension. After install, the extension performs no network
-      requests of its own.
+      never by the installed extension. Models and inference assets are never fetched at
+      runtime.
+    </li>
+    <li>
+      <strong>Update check:</strong> at most once a day the background worker asks the GitHub
+      releases API for the latest version string so the popup can show an update banner. No
+      image data or browsing data is sent; offline it fails silently.
     </li>
     <li>
       Ordinary page loads still use the site's own network traffic. This extension does not add

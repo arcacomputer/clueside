@@ -198,7 +198,7 @@ async function main() {
         aug = res.aug;
       }
 
-      const rawImage = await RawImage.fromBlob(new Blob([buffer]));
+      const rawImage = (await RawImage.fromBlob(new Blob([buffer]))).rgb();
       const chw = await dinoPreprocess(rawImage);
       const input = new ort.Tensor('float32', chw, [1, 3, DINO_CROP, DINO_CROP]);
       const outputs = await session.run({ pixel_values: input });

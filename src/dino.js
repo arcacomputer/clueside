@@ -47,11 +47,15 @@ export function dinoResizeDimensions(width, height) {
 export function dinoPackedRgbToCHW(data, channels) {
   const plane = DINO_CROP_SIZE * DINO_CROP_SIZE;
   const out = new Float32Array(3 * plane);
+  // Grayscale sources have channels < 3; replicate the single channel
+  // instead of reading past the pixel (which yields NaN).
+  const gOff = channels >= 3 ? 1 : 0;
+  const bOff = channels >= 3 ? 2 : 0;
   for (let i = 0; i < plane; i++) {
     const base = i * channels;
     out[i] = (data[base] / 255 - DINO_MEAN[0]) / DINO_STD[0];
-    out[i + plane] = (data[base + 1] / 255 - DINO_MEAN[1]) / DINO_STD[1];
-    out[i + 2 * plane] = (data[base + 2] / 255 - DINO_MEAN[2]) / DINO_STD[2];
+    out[i + plane] = (data[base + gOff] / 255 - DINO_MEAN[1]) / DINO_STD[1];
+    out[i + 2 * plane] = (data[base + bOff] / 255 - DINO_MEAN[2]) / DINO_STD[2];
   }
   return out;
 }

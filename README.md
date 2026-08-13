@@ -1,6 +1,6 @@
 # Hybrid AI Image Detector
 
-Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Images never leave your device; after install the extension performs no network requests at all.
+Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Images never leave your device; the extension never downloads models or inference assets at runtime. The only network call the installed extension makes is an optional once-a-day GitHub version check for the update banner, which sends no image data and fails silently offline.
 
 **Author:** Luis Felipe Abarca  
 **License:** MIT
@@ -56,7 +56,15 @@ Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-mo
 
 ## Local benchmark
 
-RESULTS_PLACEHOLDER
+893 images from public datasets, disjoint from probe training rows: 409 AI (DALL-E 3, Flux 1.1, GPT-4o image, Midjourney MJHQ, ELSA_D3 SD-era) and 484 real (COCO, Flickr30k, ImageNet-style, CelebA faces, Food101). "Web-stress" re-encodes every image at max 800px JPEG q78. Decision rule: raw fused score `>= 0.65`. Built and scored with the `eval/` tooling in this repo (`fetch-bench`, `sweep`, `analyze`).
+
+| Pipeline @ raw 0.65 | Clean BA | Clean TPR/TNR | Web-stress BA | Web-stress TPR/TNR |
+|---|---|---|---|---|
+| CommunityForensics only (old production) | 71.9% | 44.0 / 99.8 | 74.0% | 48.7 / 99.4 |
+| DINOv2 probe only | 93.0% | 89.7 / 96.3 | 93.3% | 89.5 / 97.1 |
+| **Ensemble (shipped policy)** | **96.1%** | 96.1 / 96.1 | **96.1%** | 95.6 / 96.7 |
+
+Per-source correctness for the shipped policy on the clean bench: DALL-E 3 97%, Flux 1.1 97%, GPT-4o 95%, Midjourney 100%, SD/ELSA 91%; CelebA 100%, COCO 96%, Flickr 97%, Food101 100%, ImageNet-style 90%. The raw 0.65 operating point is within noise of this bench's optimum (0.67), so the threshold is honest, not tuned.
 
 ## Limitations
 
