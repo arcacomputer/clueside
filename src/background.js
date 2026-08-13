@@ -2,7 +2,12 @@ const OFFSCREEN_URL = 'offscreen.html';
 const MIN_DIMENSION = 96;
 
 let offscreenCreating = null;
+let offscreenReadyPromise = null;
 const pendingByTab = new Map();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function getSettings() {
   const stored = await chrome.storage.sync.get({
@@ -18,7 +23,25 @@ async function hasOffscreenDocument() {
   return chrome.offscreen.hasDocument();
 }
 
-async function ensureOffscreen() {
+async function pingOffscreen() {
+  const res = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'ping' });
+  return Boolean(res?.ok);
+}
+
+async function waitForOffscreenListener() {
+  let lastError = 'Offscreen listener not ready';
+  for (let i = 0; i < 50; i++) {
+    try {
+      if (await pingOffscreen()) return;
+    } catch (err) {
+      lastError = err.message || String(err);
+    }
+    await sleep(100);
+  }
+  throw new Error(lastError);
+}
+
+async function createOffscreenDocument() {
   if (await hasOffscreenDocument()) return;
 
   if (offscreenCreating) {
@@ -26,21 +49,57 @@ async function ensureOffscreen() {
     return;
   }
 
-  offscreenCreating = chrome.offscreen.createDocument({
-    url: OFFSCREEN_URL,
-    reasons: ['WORKERS'],
-    justification: 'Run ONNX image classification with WebGPU or WASM',
-  });
+  offscreenCreating = chrome.offscreen
+    .createDocument({
+      url: OFFSCREEN_URL,
+      reasons: ['WORKERS'],
+      justification: 'Run ONNX image classification with WebGPU or WASM',
+    })
+    .catch((err) => {
+      const msg = err.message || String(err);
+      if (msg.includes('single offscreen')) return;
+      throw err;
+    });
 
-  await offscreenCreating;
-  offscreenCreating = null;
+  try {
+    await offscreenCreating;
+  } finally {
+    offscreenCreating = null;
+  }
+}
 
-  const settings = await getSettings();
-  await chrome.runtime.sendMessage({
-    target: 'offscreen',
-    type: 'init',
-    threshold: settings.threshold,
-  });
+/**
+ * Wait until the offscreen document exists, its message listener is
+ * registered (the onnxruntime bundle has evaluated), and ensureSession
+ * has finished. Analyzes must not run before this resolves.
+ */
+async function ensureOffscreen() {
+  if (offscreenReadyPromise) {
+    await offscreenReadyPromise;
+    return;
+  }
+
+  offscreenReadyPromise = (async () => {
+    await createOffscreenDocument();
+    await waitForOffscreenListener();
+
+    const settings = await getSettings();
+    const init = await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'init',
+      threshold: settings.threshold,
+    });
+    if (!init?.ok) {
+      throw new Error(init?.error || 'Offscreen init failed');
+    }
+  })();
+
+  try {
+    await offscreenReadyPromise;
+  } catch (err) {
+    offscreenReadyPromise = null;
+    throw err;
+  }
 }
 
 async function sendToOffscreen(payload) {

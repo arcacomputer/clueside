@@ -1,7 +1,7 @@
 import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
 import { preprocessBitmap } from './clip-preprocess.js';
-import { base64ToBytes } from './bytes.js';
+import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import {
   createCommunityForensicsSession,
   predictCHW,
@@ -18,6 +18,7 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 let session = null;
 let sessionDevice = 'wasm';
 let initError = null;
+let sessionPromise = null;
 let threshold = DEFAULT_THRESHOLD;
 
 async function modelFileReachable(file) {
@@ -49,9 +50,10 @@ async function downloadToCacheStorage() {
 
 async function ensureSession() {
   if (session) return { session, device: sessionDevice };
+  if (sessionPromise) return sessionPromise;
   if (initError) throw initError;
 
-  try {
+  sessionPromise = (async () => {
     if (!(await modelFilesPresent())) {
       await downloadToCacheStorage();
       if (!(await modelFilesPresent())) {
@@ -70,8 +72,13 @@ async function ensureSession() {
     session = created.session;
     sessionDevice = created.device;
     return created;
+  })();
+
+  try {
+    return await sessionPromise;
   } catch (err) {
     initError = err;
+    sessionPromise = null;
     throw err;
   }
 }
@@ -117,7 +124,7 @@ async function resolveImageBytes(message) {
     if (bytes.byteLength === 0) {
       throw new Error('Empty image payload');
     }
-    return bytes.buffer;
+    return toArrayBuffer(bytes);
   }
 
   if (typeof message.url === 'string' && /^https?:\/\//i.test(message.url)) {
@@ -127,10 +134,8 @@ async function resolveImageBytes(message) {
   throw new Error('No image bytes received (missing bufferB64 and non-http URL)');
 }
 
-async function classifyImage(bytes, url, customThreshold) {
-  if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0) {
-    throw new Error('No image bytes to analyze');
-  }
+async function classifyImage(rawBytes, url, customThreshold) {
+  const bytes = toArrayBuffer(rawBytes);
   const heuristics = await analyzeHeuristics(bytes, url);
 
   let neuralPAi = 0.5;
@@ -171,6 +176,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   (async () => {
     try {
+      if (message.type === 'ping') {
+        sendResponse({ ok: true, ready: Boolean(session) });
+        return;
+      }
+
       if (message.type === 'init') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
         const { device } = await ensureSession();
@@ -198,7 +208,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 console.log('Hybrid AI Image Detector offscreen ready');
 
 function sniffMime(bytes) {
-  const u8 = new Uint8Array(bytes instanceof ArrayBuffer ? bytes : bytes.buffer);
+  const buf = toArrayBuffer(bytes);
+  const u8 = new Uint8Array(buf);
   if (u8[0] === 0x89 && u8[1] === 0x50) return 'image/png';
   if (u8[0] === 0xff && u8[1] === 0xd8) return 'image/jpeg';
   if (u8[0] === 0x47 && u8[1] === 0x49) return 'image/gif';

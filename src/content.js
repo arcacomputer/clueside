@@ -1,12 +1,15 @@
 import { bytesToBase64 } from './bytes.js';
+import { isTransientAnalyzeError, withRetries } from './analyze-retry.js';
 
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
 const badgeByEl = new WeakMap();
+const inFlight = new WeakSet();
 let enabled = true;
 let autoScan = true;
 let scanGeneration = 0;
 let observersReady = false;
+let repositionRaf = 0;
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -50,26 +53,91 @@ function isVisible(el) {
   return true;
 }
 
+function badgeHost(el) {
+  if (el instanceof HTMLImageElement) {
+    return el.closest('picture') || el;
+  }
+  return el;
+}
+
+function ensureWrap(host) {
+  const parent = host.parentElement;
+  if (parent?.classList.contains('haid-wrap')) return parent;
+
+  const wrap = document.createElement('span');
+  wrap.className = 'haid-wrap';
+  const style = getComputedStyle(host);
+  if (style.float && style.float !== 'none') {
+    wrap.style.float = style.float;
+  }
+  wrap.style.display = style.display === 'block' ? 'block' : 'inline-block';
+  host.replaceWith(wrap);
+  wrap.appendChild(host);
+  return wrap;
+}
+
 function ensureBadge(el) {
   let badge = badgeByEl.get(el);
-  if (badge) return badge;
+  if (badge && document.contains(badge)) return badge;
+  if (badge) badge.remove();
+
+  const host = badgeHost(el);
+  const wrap = host.parentElement?.classList.contains('haid-wrap')
+    ? host.parentElement
+    : host instanceof HTMLImageElement || host instanceof HTMLPictureElement
+      ? ensureWrap(host)
+      : null;
 
   badge = document.createElement('div');
   badge.className = 'haid-badge haid-pending';
   badge.textContent = '...';
   badge.setAttribute('role', 'status');
   badge.setAttribute('aria-live', 'polite');
-  document.body.appendChild(badge);
+
+  if (wrap) {
+    wrap.appendChild(badge);
+  } else {
+    document.body.appendChild(badge);
+  }
 
   badgeByEl.set(el, badge);
+  placeBadge(el, badge);
   return badge;
 }
 
 function placeBadge(el, badge) {
+  const wrap = badge.parentElement;
+  if (wrap?.classList.contains('haid-wrap')) {
+    badge.style.position = 'absolute';
+    badge.style.top = '4px';
+    badge.style.left = '4px';
+    return;
+  }
+
+  if (!document.contains(el)) {
+    badge.remove();
+    return;
+  }
+
   const rect = el.getBoundingClientRect();
   badge.style.position = 'fixed';
   badge.style.top = `${rect.top + 4}px`;
   badge.style.left = `${rect.left + 4}px`;
+  badge.style.display = rect.width < 8 || rect.height < 8 ? 'none' : '';
+}
+
+function scheduleReposition() {
+  if (repositionRaf) return;
+  repositionRaf = requestAnimationFrame(() => {
+    repositionRaf = 0;
+    for (const [el, badge] of badgeByEl.entries()) {
+      if (!document.contains(el) || !document.contains(badge)) {
+        badge.remove();
+        continue;
+      }
+      placeBadge(el, badge);
+    }
+  });
 }
 
 function shortError(message) {
@@ -130,66 +198,94 @@ function renderBadge(el, result) {
   badge.title = lines.join('\n');
 }
 
-async function analyzeHttpUrl(el, url, source) {
-  const { width, height } = elementSize(el);
-  const requestId = uid();
-
-  const result = await chrome.runtime.sendMessage({
-    type: 'analyze-url',
-    requestId,
-    url: new URL(url, location.href).href,
-    width,
-    height,
-    source,
-  });
-
-  renderBadge(el, result);
+function markFinal(el) {
+  seenGeneration.set(el, scanGeneration);
 }
 
-async function analyzeBlobOrData(el, url, source) {
+async function analyzeHttpUrl(el, url, source) {
   const { width, height } = elementSize(el);
+  ensureBadge(el);
 
-  try {
-    const res = await fetch(url);
-    const buffer = await res.arrayBuffer();
-    const requestId = uid();
-
-    const result = await chrome.runtime.sendMessage({
-      type: 'analyze-buffer',
-      requestId,
-      url,
-      bufferB64: bytesToBase64(buffer),
+  const result = await withRetries(async () => {
+    const response = await chrome.runtime.sendMessage({
+      type: 'analyze-url',
+      requestId: uid(),
+      url: new URL(url, location.href).href,
       width,
       height,
       source,
     });
+    return response || { error: 'No response from extension' };
+  });
+
+  renderBadge(el, result);
+  if (!result?.error || !isTransientAnalyzeError(result.error)) {
+    markFinal(el);
+  }
+}
+
+async function analyzeBlobOrData(el, url, source) {
+  const { width, height } = elementSize(el);
+  ensureBadge(el);
+
+  try {
+    const res = await fetch(url);
+    const buffer = await res.arrayBuffer();
+    const bufferB64 = bytesToBase64(buffer);
+
+    const result = await withRetries(async () => {
+      const response = await chrome.runtime.sendMessage({
+        type: 'analyze-buffer',
+        requestId: uid(),
+        url,
+        bufferB64,
+        width,
+        height,
+        source,
+      });
+      return response || { error: 'No response from extension' };
+    });
 
     renderBadge(el, result);
+    if (!result?.error || !isTransientAnalyzeError(result.error)) {
+      markFinal(el);
+    }
   } catch {
     renderBadge(el, {
       error: 'Cannot read blob/data URL (cross-origin). No score shown.',
     });
+    markFinal(el);
   }
 }
 
 function queueImage(el, url, source) {
   if (!enabled || !autoScan || !url) return;
+  if (inFlight.has(el)) return;
   if (seenGeneration.get(el) === scanGeneration) return;
   if (!isVisible(el)) return;
 
-  seenGeneration.set(el, scanGeneration);
+  inFlight.add(el);
 
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
-    analyzeBlobOrData(el, url, source);
-    return;
-  }
+  const run = async () => {
+    try {
+      if (url.startsWith('blob:') || url.startsWith('data:')) {
+        await analyzeBlobOrData(el, url, source);
+        return;
+      }
 
-  if (/^https?:\/\//i.test(url)) {
-    analyzeHttpUrl(el, url, source);
-    return;
-  }
+      if (/^https?:\/\//i.test(url)) {
+        await analyzeHttpUrl(el, url, source);
+        return;
+      }
 
-  renderBadge(el, { skipped: true, reason: 'Unsupported URL scheme' });
+      renderBadge(el, { skipped: true, reason: 'Unsupported URL scheme' });
+      markFinal(el);
+    } finally {
+      inFlight.delete(el);
+    }
+  };
+
+  run();
 }
 
 function scanImg(el) {
@@ -215,6 +311,7 @@ function scanImg(el) {
 
 function scanBackground(el) {
   if (!enabled || !autoScan) return;
+  if (el.classList?.contains('haid-wrap') || el.classList?.contains('haid-badge')) return;
   for (const url of collectBackgroundUrls(el)) {
     queueImage(el, url, 'background');
   }
@@ -263,6 +360,9 @@ const mutationObserver = new MutationObserver((mutations) => {
         watch(node);
         scanImg(node);
       } else if (node instanceof Element) {
+        if (node.classList?.contains('haid-wrap') || node.classList?.contains('haid-badge')) {
+          continue;
+        }
         watch(node);
         scanNode(node);
       }
@@ -295,25 +395,8 @@ function attachObservers() {
     attributeFilter: ['src', 'srcset', 'style', 'class'],
   });
 
-  window.addEventListener(
-    'scroll',
-    () => {
-      for (const [el, badge] of badgeByEl.entries()) {
-        if (document.contains(el)) placeBadge(el, badge);
-      }
-    },
-    { passive: true }
-  );
-
-  window.addEventListener(
-    'resize',
-    () => {
-      for (const [el, badge] of badgeByEl.entries()) {
-        if (document.contains(el)) placeBadge(el, badge);
-      }
-    },
-    { passive: true }
-  );
+  window.addEventListener('scroll', scheduleReposition, { capture: true, passive: true });
+  window.addEventListener('resize', scheduleReposition, { passive: true });
 }
 
 async function bootstrap() {
@@ -324,8 +407,8 @@ async function bootstrap() {
   attachObservers();
 
   if (enabled && autoScan) {
+    await chrome.runtime.sendMessage({ type: 'warmup' });
     rescanAll();
-    chrome.runtime.sendMessage({ type: 'warmup' });
   }
 }
 
@@ -339,9 +422,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.autoScan) autoScan = changes.autoScan.newValue !== false;
 
   if ((!wasEnabled && enabled) || (!wasAutoScan && autoScan)) {
-    rescanAll();
     if (enabled && autoScan) {
-      chrome.runtime.sendMessage({ type: 'warmup' });
+      chrome.runtime.sendMessage({ type: 'warmup' }).then(() => rescanAll());
     }
   }
 });

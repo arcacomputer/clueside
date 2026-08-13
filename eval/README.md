@@ -76,6 +76,8 @@ Selected AI scores (neural, harness path):
 
 `mars` scored 0.539 in a separate AutoProcessor experiment but 0.878 here, which illustrates the preprocessing path difference above. `n=19` is a small public fixture, not proof of 75% on the private bounty benchmark.
 
+Chrome gallery (same 19 images, after a reload, raw 0.65): reals OK in the 0-25% band; seven AIs at 82-100%; still miss photoreal DALL-E 3 (`pluto` ~4-14%, `crying-robot` ~20%). No ensemble or score stretch was added: earlier 5-class and distilled heads dropped real-photo TNR. The competitive advantage versus LocalLens on this fixture is 10/10 real recall, so the neural head stays CommunityForensics FP32 sigmoid.
+
 ### Prior heads on the same fixture (for context)
 
 | Head | AI recall | Real recall | BA @ 0.65 |
