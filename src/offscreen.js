@@ -4,6 +4,7 @@ import { fuseScores, fuseNeuralScores, DEFAULT_THRESHOLD } from './fuse.js';
 import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import {
+  configureOrtLogging,
   createCommunityForensicsSession,
   predictAdaptiveViews,
   predictCHW,
@@ -11,6 +12,7 @@ import {
   assetReachable,
   MODEL_ID,
   MODEL_ONNX_PATH,
+  ORT_SESSION_LOG_OPTIONS,
 } from './community-forensics.js';
 import {
   DINO_MODEL_ID,
@@ -75,17 +77,22 @@ async function tryCreateDinoHead() {
     const modelUrl = chrome.runtime.getURL(`models/${DINO_MODEL_ID}/${DINO_ONNX_PATH}`);
     if (!(await assetReachable(modelUrl))) throw new Error('dino model missing');
 
+    configureOrtLogging();
     const created = await ort.InferenceSession.create(modelUrl, {
       executionProviders: sessionDevice === 'webgpu' ? ['webgpu'] : ['wasm'],
+      ...ORT_SESSION_LOG_OPTIONS,
     }).catch(() =>
-      ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] })
+      ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        ...ORT_SESSION_LOG_OPTIONS,
+      })
     );
 
     dinoSession = created;
     dinoProbe = probe;
     console.log('DINOv2 probe head ready');
   } catch (err) {
-    console.warn('DINOv2 head unavailable, running CommunityForensics only:', err?.message || err);
+    console.debug('DINOv2 head unavailable, running CommunityForensics only:', err?.message || err);
     dinoSession = null;
     dinoProbe = null;
   }
@@ -142,7 +149,7 @@ async function dinoScore(bitmap) {
     const outputs = await dinoSession.run({ [DINO_INPUT_NAME]: input });
     return dinoScoreHiddenState(outputs.last_hidden_state, dinoProbe);
   } catch (err) {
-    console.warn('DINO head inference failed:', err?.message || err);
+    console.debug('DINO head inference failed:', err?.message || err);
     return null;
   }
 }

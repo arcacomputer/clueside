@@ -16,14 +16,14 @@ import {
 const REQUIRED_WASM_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
 
 /** ORT session option: OrtLoggingLevel::ORT_LOGGING_LEVEL_ERROR (suppresses W: lines). */
-const ORT_SESSION_LOG_OPTIONS = { logSeverityLevel: 3 };
+export const ORT_SESSION_LOG_OPTIONS = { logSeverityLevel: 3 };
 
 /**
  * ONNX Runtime logs routine WebGPU/WASM placement warnings at severity "warning".
  * Chrome lists extension console.warn on chrome://extensions as Errors, so keep ORT
  * at error/fatal only. Real session failures still propagate as thrown errors.
  */
-function configureOrtLogging() {
+export function configureOrtLogging() {
   ort.env.logLevel = 'error';
 }
 

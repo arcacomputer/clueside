@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeDimensions, shouldTryElementPixels, MAX_SHORTEST_EDGE } from '../src/element-pixels.js';
+import {
+  encodeDimensions,
+  shouldTryElementPixels,
+  MAX_SHORTEST_EDGE,
+  MAX_LONGEST_EDGE,
+} from '../src/element-pixels.js';
 import { isFetchSkipError } from '../src/analyze-retry.js';
 
 describe('encodeDimensions', () => {
@@ -13,6 +18,13 @@ describe('encodeDimensions', () => {
     const { width, height } = encodeDimensions(8000, 4000);
     assert.equal(height, MAX_SHORTEST_EDGE);
     assert.equal(width, 2048);
+  });
+
+  it('downscales panoramas whose shortest edge is already small', () => {
+    const { width, height } = encodeDimensions(40000, 500);
+    assert.equal(width, MAX_LONGEST_EDGE);
+    assert.equal(height, 51);
+    assert.ok(width * height < 40000 * 500);
   });
 });
 

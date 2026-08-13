@@ -13,19 +13,34 @@
  * needs shortest-edge 512 for its largest view. */
 export const MAX_SHORTEST_EDGE = 1024;
 
+/** Panoramas can have a tiny shortest edge but a huge long edge. */
+export const MAX_LONGEST_EDGE = 4096;
+
 /**
  * @param {number} width
  * @param {number} height
  * @returns {{width: number, height: number}}
  */
 export function encodeDimensions(width, height) {
-  const shortest = Math.min(width, height);
-  if (shortest <= MAX_SHORTEST_EDGE) return { width, height };
-  const scale = MAX_SHORTEST_EDGE / shortest;
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
+  let w = width;
+  let h = height;
+
+  const applyScale = (scale) => {
+    w = Math.max(1, Math.round(w * scale));
+    h = Math.max(1, Math.round(h * scale));
   };
+
+  const shortest = Math.min(w, h);
+  if (shortest > MAX_SHORTEST_EDGE) {
+    applyScale(MAX_SHORTEST_EDGE / shortest);
+  }
+
+  const longest = Math.max(w, h);
+  if (longest > MAX_LONGEST_EDGE) {
+    applyScale(MAX_LONGEST_EDGE / longest);
+  }
+
+  return { width: w, height: h };
 }
 
 /**
