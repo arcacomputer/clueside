@@ -30,9 +30,15 @@ describe('isTransientAnalyzeError', () => {
   it('does not retry CDN/CORS fetch failures', () => {
     assert.equal(isFetchSkipError('Failed to fetch'), true);
     assert.equal(isFetchSkipError('Image fetch failed (403)'), true);
+    assert.equal(isFetchSkipError('Image fetch timed out'), true);
     assert.equal(isTransientAnalyzeError('Failed to fetch'), false);
     assert.equal(isTransientAnalyzeError('Image fetch failed (403)'), false);
     assert.equal(isTransientAnalyzeError('Not an image content-type (text/html)'), false);
+  });
+
+  it('does not retry inference timeout', () => {
+    assert.equal(isTransientAnalyzeError('Inference timed out'), false);
+    assert.equal(isTransientAnalyzeError('Timed out'), false);
   });
 });
 

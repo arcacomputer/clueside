@@ -1,15 +1,22 @@
 import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
-import { preprocessBitmapViews } from './clip-preprocess.js';
+import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import {
   createCommunityForensicsSession,
   predictAdaptiveViews,
+  predictCHW,
   probeWebGpuAdapter,
   assetReachable,
   MODEL_ID,
   MODEL_ONNX_PATH,
 } from './community-forensics.js';
+import { FETCH_TIMEOUT_MS, INFERENCE_TIMEOUT_MS } from './analyze-retry.js';
+import {
+  createExclusiveLock,
+  normalizeTtaMode,
+  runExclusiveAfterStart,
+} from './analyze-queue.js';
 
 const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
@@ -20,6 +27,7 @@ let sessionDevice = 'wasm';
 let initError = null;
 let sessionPromise = null;
 let threshold = DEFAULT_THRESHOLD;
+const inferLock = createExclusiveLock();
 
 async function modelFileReachable(file) {
   const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
@@ -84,27 +92,42 @@ async function ensureSession() {
 }
 
 async function fetchImageBytes(url) {
-  const res = await fetch(url, { credentials: 'omit', cache: 'force-cache' });
-  if (!res.ok) {
-    throw new Error(`Image fetch failed (${res.status})`);
-  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      credentials: 'omit',
+      cache: 'force-cache',
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Image fetch failed (${res.status})`);
+    }
 
-  const type = res.headers.get('content-type') || '';
-  if (type && !type.startsWith('image/')) {
-    throw new Error(`Not an image content-type (${type})`);
-  }
+    const type = res.headers.get('content-type') || '';
+    if (type && !type.startsWith('image/')) {
+      throw new Error(`Not an image content-type (${type})`);
+    }
 
-  const cl = Number(res.headers.get('content-length') || 0);
-  if (cl > MAX_IMAGE_BYTES) {
-    throw new Error('Image exceeds size cap');
-  }
+    const cl = Number(res.headers.get('content-length') || 0);
+    if (cl > MAX_IMAGE_BYTES) {
+      throw new Error('Image exceeds size cap');
+    }
 
-  const buffer = await res.arrayBuffer();
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error('Image exceeds size cap');
-  }
+    const buffer = await res.arrayBuffer();
+    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error('Image exceeds size cap');
+    }
 
-  return buffer;
+    return buffer;
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Image fetch timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -134,9 +157,10 @@ async function resolveImageBytes(message) {
   throw new Error('No image bytes received (missing bufferB64 and non-http URL)');
 }
 
-async function classifyImage(rawBytes, url, customThreshold) {
+async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   const bytes = toArrayBuffer(rawBytes);
   const heuristics = await analyzeHeuristics(bytes, url);
+  const mode = normalizeTtaMode(ttaMode);
 
   let neuralPAi = 0.5;
   let modelError = null;
@@ -147,8 +171,13 @@ async function classifyImage(rawBytes, url, customThreshold) {
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
     try {
-      const views = await preprocessBitmapViews(bitmap);
-      neuralPAi = (await predictAdaptiveViews(activeSession, views)).neuralPAi;
+      if (mode === 'center') {
+        const chw = await preprocessBitmap(bitmap);
+        neuralPAi = await predictCHW(activeSession, chw);
+      } else {
+        const views = await preprocessBitmapViews(bitmap);
+        neuralPAi = (await predictAdaptiveViews(activeSession, views, { mode })).neuralPAi;
+      }
     } finally {
       bitmap.close();
     }
@@ -191,7 +220,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.type === 'analyze') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
         const bytes = await resolveImageBytes(message);
-        const result = await classifyImage(bytes, message.url || '', message.threshold);
+        await ensureSession();
+        const result = await runExclusiveAfterStart(
+          inferLock,
+          () =>
+            classifyImage(
+              bytes,
+              message.url || '',
+              message.threshold,
+              message.ttaMode
+            ),
+          INFERENCE_TIMEOUT_MS,
+          'Inference timed out'
+        );
         sendResponse({ ok: true, result });
         return;
       }

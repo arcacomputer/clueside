@@ -118,7 +118,7 @@ function isHttpUrl(url) {
  * blob/data and file-drop payloads arrive here already base64-encoded
  * and are forwarded as strings.
  */
-async function analyzeRequest({ requestId, tabId, url, bufferB64, width, height, source, threshold: customThreshold }) {
+async function analyzeRequest({ requestId, tabId, url, bufferB64, width, height, source, threshold: customThreshold, ttaMode }) {
   const settings = await getSettings();
   if (!settings.enabled) {
     return { skipped: true, reason: 'Extension disabled' };
@@ -136,6 +136,7 @@ async function analyzeRequest({ requestId, tabId, url, bufferB64, width, height,
       bufferB64,
       url,
       threshold,
+      ttaMode,
     });
 
     if (!response?.ok) {
@@ -174,6 +175,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         width: message.width,
         height: message.height,
         source: message.source,
+        ttaMode: message.ttaMode,
       });
       sendResponse(result);
       return;
@@ -199,6 +201,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         height: message.height,
         source: message.source,
         threshold: message.threshold,
+        ttaMode: message.ttaMode,
       });
       sendResponse(result);
       return;
