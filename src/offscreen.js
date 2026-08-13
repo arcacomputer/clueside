@@ -1,16 +1,12 @@
 import { env, pipeline } from '@huggingface/transformers';
-import { analyzeHeuristics, neuralPAiFromClassification, topGeneratorHint } from './heuristics.js';
+import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
+import { neuralPAiFromSourceDetector, topGeneratorHint } from './scoring.js';
+import { SOURCE_MODEL_ID, MODEL_FILES } from './models.js';
 
-const MODEL_ID = 'onnx-community/ai-source-detector-ONNX';
 const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
-const HF_FILES = [
-  'onnx/model_quantized.onnx',
-  'config.json',
-  'preprocessor_config.json',
-];
 
-let classifier = null;
+let sourceClassifier = null;
 let initError = null;
 let threshold = DEFAULT_THRESHOLD;
 
@@ -23,21 +19,20 @@ function configureEnv() {
   env.useCustomCache = false;
 }
 
-async function modelFilesPresent() {
-  const checks = HF_FILES.map(async (file) => {
-    const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
+async function modelFilesPresent(modelId) {
+  const checks = MODEL_FILES[modelId].map(async (file) => {
+    const url = chrome.runtime.getURL(`models/${modelId}/${file}`);
     const res = await fetch(url, { method: 'HEAD' });
     return res.ok;
   });
-  const results = await Promise.all(checks);
-  return results.every(Boolean);
+  return (await Promise.all(checks)).every(Boolean);
 }
 
-async function downloadToCacheStorage() {
-  const base = `https://huggingface.co/${MODEL_ID}/resolve/main`;
+async function downloadToCacheStorage(modelId) {
+  const base = `https://huggingface.co/${modelId}/resolve/main`;
   const cache = await caches.open(HF_CACHE_NAME);
 
-  for (const file of HF_FILES) {
+  for (const file of MODEL_FILES[modelId]) {
     const url = `${base}/${file}`;
     const cached = await cache.match(url);
     if (cached) continue;
@@ -51,32 +46,25 @@ async function downloadToCacheStorage() {
 }
 
 async function ensureClassifier() {
-  if (classifier) return classifier;
+  if (sourceClassifier) return sourceClassifier;
   if (initError) throw initError;
 
   configureEnv();
-
-  const localReady = await modelFilesPresent();
-  if (!localReady) {
-    try {
-      await downloadToCacheStorage();
-      env.allowRemoteModels = true;
-      env.remoteModelPath = `https://huggingface.co/${MODEL_ID}/resolve/main`;
-    } catch (err) {
-      initError = err;
-      throw err;
-    }
-  }
-
   const device = navigator.gpu ? 'webgpu' : 'wasm';
 
   try {
-    classifier = await pipeline('image-classification', MODEL_ID, {
+    if (!(await modelFilesPresent(SOURCE_MODEL_ID))) {
+      env.allowRemoteModels = true;
+      await downloadToCacheStorage(SOURCE_MODEL_ID);
+    }
+
+    sourceClassifier = await pipeline('image-classification', SOURCE_MODEL_ID, {
       device,
       dtype: 'q8',
     });
+
     env.allowRemoteModels = false;
-    return classifier;
+    return sourceClassifier;
   } catch (err) {
     initError = err;
     throw err;
@@ -98,7 +86,7 @@ async function classifyImage(buffer, url, customThreshold) {
     const objectUrl = URL.createObjectURL(blob);
     try {
       const outputs = await pipe(objectUrl);
-      neuralPAi = neuralPAiFromClassification(outputs);
+      neuralPAi = neuralPAiFromSourceDetector(outputs);
       generatorHint = topGeneratorHint(outputs);
     } finally {
       URL.revokeObjectURL(objectUrl);

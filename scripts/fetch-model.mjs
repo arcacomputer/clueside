@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Download ai-source-detector ONNX weights and config at build time.
- * After this script runs, the unpacked extension works fully offline.
+ * Download ONNX weights and config at build time.
+ * Pass --with-binary to also fetch the optional CIFAKE binary head for eval experiments.
  */
 
 import { mkdir, writeFile, access } from 'node:fs/promises';
@@ -12,15 +12,24 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const MODELS_DIR = join(ROOT, 'models', 'onnx-community', 'ai-source-detector-ONNX');
 
-const REPO = 'onnx-community/ai-source-detector-ONNX';
-const BASE = `https://huggingface.co/${REPO}/resolve/main`;
-
-const FILES = [
-  'onnx/model_quantized.onnx',
-  'config.json',
-  'preprocessor_config.json',
+const MODELS = [
+  {
+    repo: 'onnx-community/ai-source-detector-ONNX',
+    files: ['onnx/model_quantized.onnx', 'config.json', 'preprocessor_config.json'],
+    dtype: 'q8',
+    onnx: 'onnx/model_quantized.onnx',
+    role: 'source',
+    required: true,
+  },
+  {
+    repo: 'onnx-community/ai-image-detection-ONNX',
+    files: ['onnx/model_quantized.onnx', 'config.json', 'preprocessor_config.json'],
+    dtype: 'q8',
+    onnx: 'onnx/model_quantized.onnx',
+    role: 'binary',
+    required: false,
+  },
 ];
 
 async function exists(path) {
@@ -42,25 +51,38 @@ async function download(url, dest) {
   await pipeline(res.body, createWriteStream(dest));
 }
 
-async function main() {
-  await mkdir(MODELS_DIR, { recursive: true });
+async function fetchModel({ repo, files, dtype, onnx, role }) {
+  const modelDir = join(ROOT, 'models', repo);
+  const base = `https://huggingface.co/${repo}/resolve/main`;
 
-  for (const file of FILES) {
-    const dest = join(MODELS_DIR, file);
+  await mkdir(modelDir, { recursive: true });
+
+  for (const file of files) {
+    const dest = join(modelDir, file);
     if (await exists(dest)) {
-      console.log(`Already present: ${file}`);
+      console.log(`Already present: ${repo}/${file}`);
       continue;
     }
-    await download(`${BASE}/${file}`, dest);
+    await download(`${base}/${file}`, dest);
   }
 
   const manifest = {
-    id: REPO,
-    dtype: 'q8',
-    onnx: 'onnx/model_quantized.onnx',
+    id: repo,
+    dtype,
+    onnx,
+    role,
     fetchedAt: new Date().toISOString(),
   };
-  await writeFile(join(MODELS_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await writeFile(join(modelDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  console.log(`Fetched ${repo} (${role})`);
+}
+
+async function main() {
+  const withBinary = process.argv.includes('--with-binary');
+  for (const model of MODELS) {
+    if (!model.required && !withBinary) continue;
+    await fetchModel(model);
+  }
   console.log('Model fetch complete.');
 }
 

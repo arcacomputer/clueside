@@ -9,6 +9,7 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 
 - Auto-scans images on ordinary webpages with overlay badges
 - Neural classifier: Hugging Face `onnx-community/ai-source-detector-ONNX` (ViT-Base, q8, ~83MB)
+- Neural score uses the top AI class head, not `1 - p(real)` (spread mass across four AI labels inflated photo scores)
 - Deterministic signals: C2PA `digitalSourceType`, EXIF/XMP/IPTC, PNG/JPEG embedded text, weak URL hints
 - Raw fused score with default threshold **65% p(AI)** (no remapping of model 0.5 to UI 65%)
 - Popup file drop for local images
@@ -42,7 +43,7 @@ On first run, if `models/` is missing from the packed extension, the offscreen w
 
 ## How scoring works
 
-1. **Neural:** 5-class softmax from the ONNX model. `p(AI) = 1 - p(real)`. Generator class names are optional hints only.
+1. **Neural:** 5-class softmax from the ONNX source detector. `p(AI)` is the top AI head score (or max AI head when `real` wins argmax), not `1 - p(real)`. Generator class names are optional hints only.
 2. **Metadata:** C2PA trained/composite algorithmic media, EXIF Software/CreatorTool/DigitalSourceType, A1111/ComfyUI PNG text, JPEG comments.
 3. **URL hints:** Weak +0.05 max, capped so they never push a sub-threshold neural score over 65% alone.
 4. **Fusion:** Strong metadata forces 0.95-0.99. Otherwise neural score plus weak bonuses. Eval is binary at raw >= 0.65.
@@ -55,7 +56,7 @@ npm test
 
 ## Evaluation harness
 
-See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. Reports per-image CSV plus balanced accuracy at raw 0.65 when `ai/` and `real/` subfolders exist.
+See `eval/README.md`. Run `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. Use `--compare-legacy` to print old `1 - p(real)` balanced accuracy beside the new mapping.
 
 ## Limitations
 

@@ -243,49 +243,6 @@ export function computeFrequencyResidualVote(bytes) {
   return 0;
 }
 
-/**
- * Map transformers.js classification output to p(AI) = 1 - p_real.
- * @param {Array<{label: string, score: number}>} outputs
- */
-export function neuralPAiFromClassification(outputs) {
-  if (!outputs?.length) return 0.5;
-
-  let pReal = 0;
-  let pAiClasses = 0;
-  const aiLabels = new Set(['stable_diffusion', 'midjourney', 'dalle', 'other_ai']);
-
-  for (const { label, score } of outputs) {
-    const norm = label.toLowerCase().replace(/\s+/g, '_');
-    if (norm === 'real') {
-      pReal += score;
-    } else if (aiLabels.has(norm)) {
-      pAiClasses += score;
-    }
-  }
-
-  if (pReal > 0) {
-    return clamp01(1 - pReal);
-  }
-
-  return clamp01(pAiClasses || 0.5);
-}
-
-/**
- * Optional generator class hint from top non-real label (never stated as fact).
- * @param {Array<{label: string, score: number}>} outputs
- */
-export function topGeneratorHint(outputs) {
-  const aiLabels = ['stable_diffusion', 'midjourney', 'dalle', 'other_ai'];
-  const sorted = [...outputs].sort((a, b) => b.score - a.score);
-  for (const item of sorted) {
-    const norm = item.label.toLowerCase().replace(/\s+/g, '_');
-    if (aiLabels.includes(norm) && item.score > 0.2) {
-      return norm.replace(/_/g, ' ');
-    }
-  }
-  return null;
-}
-
 // --- helpers ---
 
 function isPng(bytes) {
