@@ -35,3 +35,27 @@ export function base64ToBytes(base64) {
   }
   return bytes;
 }
+
+/**
+ * Coerce a transport payload into a standalone ArrayBuffer.
+ * Throws a clear error instead of crashing on undefined.buffer.
+ * @param {unknown} input
+ * @returns {ArrayBuffer}
+ */
+export function toArrayBuffer(input) {
+  if (input instanceof ArrayBuffer) {
+    if (input.byteLength === 0) {
+      throw new Error('No image bytes to analyze');
+    }
+    return input;
+  }
+
+  if (ArrayBuffer.isView(input)) {
+    if (input.byteLength === 0) {
+      throw new Error('No image bytes to analyze');
+    }
+    return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+  }
+
+  throw new Error('No image bytes received (missing bufferB64 and non-http URL)');
+}

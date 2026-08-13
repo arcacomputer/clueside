@@ -61,7 +61,7 @@ See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `n
 ## Limitations
 
 - New or fine-tuned generators may score incorrectly until the model is retrained.
-- Photoreal DALL-E 3 images can still score below threshold on a small public n=19 fixture (`pluto` 0.136, `crying-robot` 0.236 at raw 0.65 in the eval harness). This is not proof of 75% on the private bounty benchmark.
+- Photoreal DALL-E 3 images can still score below threshold. Chrome gallery and the Node harness both miss `pluto` (~0.04-0.14) and `crying-robot` (~0.20-0.24) at raw 0.65. Raising those two with a 5-class `1-p(real)` head or a stretched threshold would flag ordinary camera photos (the failure mode that makes LocalLens unusable here). CommunityForensics FP32 sigmoid stays the neural head so real-photo TNR stays 10/10 on the public fixture. This is not proof of 75% on the private bounty benchmark.
 - Preprocessing in production matches `src/clip-preprocess.js` (canvas in the extension, RawImage resize in the Node harness), not a live Hugging Face `AutoProcessor` call. Resize interpolation can differ slightly from upstream PIL bicubic; scores may differ from a standalone `transformers` notebook on the same file (for example `mars` scored 0.539 in an experiment but 0.878 in the harness).
 - Stripped metadata removes deterministic signals; neural-only mode is weaker.
 - Cross-origin `blob:`/`data:` URLs and CORS-blocked CDNs may show a grey badge with no score.
