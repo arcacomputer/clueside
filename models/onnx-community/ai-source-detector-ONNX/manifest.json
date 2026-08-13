@@ -1,0 +1,6 @@
+{
+  "id": "onnx-community/ai-source-detector-ONNX",
+  "dtype": "q8",
+  "onnx": "onnx/model_quantized.onnx",
+  "fetchedAt": "2026-08-13T15:40:09.713Z"
+}

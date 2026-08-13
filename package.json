@@ -1,0 +1,24 @@
+{
+  "name": "hybrid-ai-image-detector",
+  "version": "1.0.0",
+  "description": "Local MV3 Chrome extension for AI-generated image detection",
+  "type": "module",
+  "author": "Luis Felipe Abarca",
+  "license": "MIT",
+  "scripts": {
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "build": "node scripts/generate-icons.mjs && node scripts/build.mjs",
+    "test": "node --test tests/fuse.test.mjs",
+    "eval": "node eval/harness.mjs"
+  },
+  "dependencies": {
+    "@contentauth/c2pa-web": "^0.13.4",
+    "@huggingface/transformers": "^3.4.2",
+    "exifr": "^7.1.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "onnxruntime-web": "^1.21.0"
+  }
+}

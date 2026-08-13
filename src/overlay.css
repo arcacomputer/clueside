@@ -1,0 +1,35 @@
+.haid-badge {
+  position: absolute;
+  z-index: 2147483646;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.02em;
+}
+
+.haid-pending {
+  background: #555;
+}
+
+.haid-ai {
+  background: #c62828;
+}
+
+.haid-uncertain {
+  background: #ef6c00;
+}
+
+.haid-real {
+  background: #2e7d32;
+}
+
+.haid-skip,
+.haid-error {
+  background: #757575;
+}
