@@ -1,0 +1,7 @@
+{
+  "id": "onnx-community/ai-image-detect-distilled-ONNX",
+  "dtype": "q8",
+  "onnx": "onnx/model_quantized.onnx",
+  "role": "primary",
+  "fetchedAt": "2026-08-13T16:07:11.682Z"
+}

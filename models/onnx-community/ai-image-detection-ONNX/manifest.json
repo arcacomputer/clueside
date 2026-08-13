@@ -1,0 +1,7 @@
+{
+  "id": "onnx-community/ai-image-detection-ONNX",
+  "dtype": "q8",
+  "onnx": "onnx/model_quantized.onnx",
+  "role": "binary-cifake",
+  "fetchedAt": "2026-08-13T16:07:11.805Z"
+}

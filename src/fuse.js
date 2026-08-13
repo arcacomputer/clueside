@@ -29,7 +29,7 @@ export const URL_HINT_MAX_BOOST = 0.05;
  */
 
 /**
- * @param {number} neuralPAi - Raw p(AI) from softmax: 1 - p_real
+ * @param {number} neuralPAi - Raw p(AI) from the primary neural head
  * @param {HeuristicSignals} signals
  * @param {number} [threshold]
  * @returns {FusionResult}

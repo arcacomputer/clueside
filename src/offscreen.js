@@ -1,16 +1,20 @@
 import { env, pipeline } from '@huggingface/transformers';
-import { analyzeHeuristics, neuralPAiFromClassification, topGeneratorHint } from './heuristics.js';
+import { analyzeHeuristics } from './heuristics.js';
 import { fuseScores, DEFAULT_THRESHOLD } from './fuse.js';
+import {
+  neuralPAiFromDistilled,
+  topGeneratorHint,
+} from './scoring.js';
+import {
+  PRIMARY_MODEL_ID,
+  HINTS_MODEL_ID,
+  MODEL_FILES,
+} from './models.js';
 
-const MODEL_ID = 'onnx-community/ai-source-detector-ONNX';
 const HF_CACHE_NAME = 'hybrid-ai-detector-model-v1';
-const HF_FILES = [
-  'onnx/model_quantized.onnx',
-  'config.json',
-  'preprocessor_config.json',
-];
 
-let classifier = null;
+let primaryClassifier = null;
+let hintsClassifier = null;
 let initError = null;
 let threshold = DEFAULT_THRESHOLD;
 
@@ -23,21 +27,20 @@ function configureEnv() {
   env.useCustomCache = false;
 }
 
-async function modelFilesPresent() {
-  const checks = HF_FILES.map(async (file) => {
-    const url = chrome.runtime.getURL(`models/${MODEL_ID}/${file}`);
+async function modelFilesPresent(modelId) {
+  const checks = MODEL_FILES[modelId].map(async (file) => {
+    const url = chrome.runtime.getURL(`models/${modelId}/${file}`);
     const res = await fetch(url, { method: 'HEAD' });
     return res.ok;
   });
-  const results = await Promise.all(checks);
-  return results.every(Boolean);
+  return (await Promise.all(checks)).every(Boolean);
 }
 
-async function downloadToCacheStorage() {
-  const base = `https://huggingface.co/${MODEL_ID}/resolve/main`;
+async function downloadToCacheStorage(modelId) {
+  const base = `https://huggingface.co/${modelId}/resolve/main`;
   const cache = await caches.open(HF_CACHE_NAME);
 
-  for (const file of HF_FILES) {
+  for (const file of MODEL_FILES[modelId]) {
     const url = `${base}/${file}`;
     const cached = await cache.match(url);
     if (cached) continue;
@@ -50,33 +53,35 @@ async function downloadToCacheStorage() {
   }
 }
 
-async function ensureClassifier() {
-  if (classifier) return classifier;
+async function ensureClassifiers() {
+  if (primaryClassifier && hintsClassifier) {
+    return { primaryClassifier, hintsClassifier };
+  }
   if (initError) throw initError;
 
   configureEnv();
-
-  const localReady = await modelFilesPresent();
-  if (!localReady) {
-    try {
-      await downloadToCacheStorage();
-      env.allowRemoteModels = true;
-      env.remoteModelPath = `https://huggingface.co/${MODEL_ID}/resolve/main`;
-    } catch (err) {
-      initError = err;
-      throw err;
-    }
-  }
-
   const device = navigator.gpu ? 'webgpu' : 'wasm';
 
   try {
-    classifier = await pipeline('image-classification', MODEL_ID, {
+    for (const modelId of [PRIMARY_MODEL_ID, HINTS_MODEL_ID]) {
+      if (!(await modelFilesPresent(modelId))) {
+        env.allowRemoteModels = true;
+        await downloadToCacheStorage(modelId);
+      }
+    }
+
+    primaryClassifier = await pipeline('image-classification', PRIMARY_MODEL_ID, {
       device,
       dtype: 'q8',
     });
+
+    hintsClassifier = await pipeline('image-classification', HINTS_MODEL_ID, {
+      device,
+      dtype: 'q8',
+    });
+
     env.allowRemoteModels = false;
-    return classifier;
+    return { primaryClassifier, hintsClassifier };
   } catch (err) {
     initError = err;
     throw err;
@@ -92,14 +97,17 @@ async function classifyImage(buffer, url, customThreshold) {
   let modelError = null;
 
   try {
-    const pipe = await ensureClassifier();
+    const { primaryClassifier: primary, hintsClassifier: hints } = await ensureClassifiers();
     const mime = sniffMime(bytes);
     const blob = new Blob([bytes], { type: mime });
     const objectUrl = URL.createObjectURL(blob);
     try {
-      const outputs = await pipe(objectUrl);
-      neuralPAi = neuralPAiFromClassification(outputs);
-      generatorHint = topGeneratorHint(outputs);
+      const [distilledOutputs, sourceOutputs] = await Promise.all([
+        primary(objectUrl),
+        hints(objectUrl),
+      ]);
+      neuralPAi = neuralPAiFromDistilled(distilledOutputs);
+      generatorHint = topGeneratorHint(sourceOutputs);
     } finally {
       URL.revokeObjectURL(objectUrl);
     }
@@ -129,7 +137,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message.type === 'init') {
         if (typeof message.threshold === 'number') threshold = message.threshold;
-        await ensureClassifier();
+        await ensureClassifiers();
         sendResponse({ ok: true, device: navigator.gpu ? 'webgpu' : 'wasm' });
         return;
       }
