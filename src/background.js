@@ -1,5 +1,13 @@
+import {
+  GITHUB_LATEST_RELEASE_URL,
+  parseLatestRelease,
+  shouldShowUpdateBanner,
+} from './update-checker.js';
+
 const OFFSCREEN_URL = 'offscreen.html';
 const MIN_DIMENSION = 96;
+const UPDATE_ALARM_NAME = 'check-github-release';
+const UPDATE_CHECK_PERIOD_MINUTES = 24 * 60;
 
 let offscreenCreating = null;
 let offscreenReadyPromise = null;
@@ -16,6 +24,61 @@ async function getSettings() {
     autoScan: true,
   });
   return stored;
+}
+
+async function getUpdateState() {
+  return chrome.storage.local.get({
+    updateRemoteVersion: null,
+    updateDownloadUrl: null,
+    updateDismissedVersion: null,
+    updateLastCheckAt: 0,
+  });
+}
+
+async function checkForUpdate() {
+  try {
+    const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    if (!response.ok) return null;
+
+    const release = await response.json();
+    const parsed = parseLatestRelease(release);
+    if (!parsed) return null;
+
+    await chrome.storage.local.set({
+      updateRemoteVersion: parsed.version,
+      updateDownloadUrl: parsed.downloadUrl,
+      updateLastCheckAt: Date.now(),
+    });
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function getUpdateStatus() {
+  const manifestVersion = chrome.runtime.getManifest().version;
+  const state = await getUpdateState();
+  const showBanner = shouldShowUpdateBanner({
+    manifestVersion,
+    remoteVersion: state.updateRemoteVersion,
+    dismissedVersion: state.updateDismissedVersion,
+  });
+
+  return {
+    manifestVersion,
+    remoteVersion: state.updateRemoteVersion,
+    downloadUrl: state.updateDownloadUrl,
+    showBanner,
+  };
+}
+
+function scheduleUpdateChecks() {
+  chrome.alarms.create(UPDATE_ALARM_NAME, {
+    periodInMinutes: UPDATE_CHECK_PERIOD_MINUTES,
+  });
 }
 
 async function hasOffscreenDocument() {
@@ -227,17 +290,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       return;
     }
+
+    if (message.type === 'check-update') {
+      await checkForUpdate();
+      sendResponse(await getUpdateStatus());
+      return;
+    }
+
+    if (message.type === 'get-update-status') {
+      sendResponse(await getUpdateStatus());
+      return;
+    }
+
+    if (message.type === 'dismiss-update') {
+      const state = await getUpdateState();
+      if (state.updateRemoteVersion) {
+        await chrome.storage.local.set({
+          updateDismissedVersion: state.updateRemoteVersion,
+        });
+      }
+      sendResponse(await getUpdateStatus());
+      return;
+    }
   })();
 
   return true;
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
+  scheduleUpdateChecks();
   try {
     await ensureOffscreen();
   } catch {
     // Model may not be present until fetch-model runs.
   }
+  checkForUpdate().catch(() => {});
 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === UPDATE_ALARM_NAME) {
+    checkForUpdate().catch(() => {});
+  }
+});
+
+scheduleUpdateChecks();
 
 export {};

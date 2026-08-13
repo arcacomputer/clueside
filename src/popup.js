@@ -7,6 +7,10 @@ const autoScanEl = document.getElementById('autoScan');
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const resultEl = document.getElementById('result');
+const updateBanner = document.getElementById('updateBanner');
+const updateVersion = document.getElementById('updateVersion');
+const updateLink = document.getElementById('updateLink');
+const dismissUpdate = document.getElementById('dismissUpdate');
 
 async function loadSettings() {
   const settings = await chrome.runtime.sendMessage({ type: 'get-settings' });
@@ -108,5 +112,49 @@ dropZone.addEventListener('drop', (e) => {
   if (file && file.type.startsWith('image/')) analyzeFile(file);
 });
 
+function renderUpdateBanner(status) {
+  if (!status?.showBanner || !status.remoteVersion || !status.downloadUrl) {
+    updateBanner.classList.remove('visible');
+    return;
+  }
+
+  updateVersion.textContent = status.remoteVersion;
+  updateLink.href = status.downloadUrl;
+  updateBanner.classList.add('visible');
+}
+
+async function refreshUpdateBanner() {
+  try {
+    const status = await chrome.runtime.sendMessage({ type: 'get-update-status' });
+    renderUpdateBanner(status);
+  } catch {
+    updateBanner.classList.remove('visible');
+  }
+}
+
+dismissUpdate.addEventListener('click', async () => {
+  try {
+    const status = await chrome.runtime.sendMessage({ type: 'dismiss-update' });
+    renderUpdateBanner(status);
+  } catch {
+    updateBanner.classList.remove('visible');
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (
+    changes.updateRemoteVersion ||
+    changes.updateDownloadUrl ||
+    changes.updateDismissedVersion
+  ) {
+    refreshUpdateBanner();
+  }
+});
+
 loadSettings();
+refreshUpdateBanner();
+chrome.runtime.sendMessage({ type: 'check-update' }).then((status) => {
+  if (status) renderUpdateBanner(status);
+}).catch(() => {});
 chrome.runtime.sendMessage({ type: 'warmup' });

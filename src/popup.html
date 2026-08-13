@@ -63,6 +63,28 @@
       border-top: 1px solid #e0e0e0;
     }
     .toggle { margin-bottom: 10px; }
+    #updateBanner {
+      display: none;
+      margin: 0 14px 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      color: #0d47a1;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    #updateBanner.visible { display: block; }
+    #updateBanner a { color: #1565c0; font-weight: 600; }
+    #updateBanner .row { margin-top: 8px; }
+    #updateBanner button {
+      border: 0;
+      background: transparent;
+      color: #1565c0;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 0;
+    }
   </style>
 </head>
 <body>
@@ -70,6 +92,14 @@
     <h1>Hybrid AI Image Detector</h1>
     <p class="sub">All analysis runs on your device. Images never leave the browser.</p>
   </header>
+  <div id="updateBanner" role="status" aria-live="polite">
+    <strong>Update available: v<span id="updateVersion"></span></strong>
+    <div>Load-unpacked installs do not auto-update. Download the latest zip, extract it, and reload the extension.</div>
+    <div class="row">
+      <a id="updateLink" href="#" target="_blank" rel="noopener noreferrer">Get latest release zip</a>
+      <button type="button" id="dismissUpdate">Dismiss</button>
+    </div>
+  </div>
   <main>
     <label class="toggle row">
       <span>Auto-scan pages</span>

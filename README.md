@@ -25,6 +25,8 @@ npm run build
 
 Load unpacked from `dist/`.
 
+**Updates (Load unpacked):** Chrome cannot auto-apply updates to unpacked extensions. The popup shows a banner when a newer [GitHub Release](https://github.com/felirami/hybrid-ai-image-detector/releases) is available. Download the latest zip, extract it, and reload the folder in `chrome://extensions`. The background worker checks once per day; opening the popup also refreshes the check. Offline or failed checks are ignored and do not affect inference.
+
 Maintainers cut a release with `git tag v1.0.0 && git push origin v1.0.0`. That tag runs tests, packages the zip, and uploads it to GitHub Releases. This repo is not claimed to be on the Chrome Web Store.
 
 ## Usage
