@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hybrid AI Image Detector",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Detect AI-generated images locally. Images never leave your device.",
   "author": "Luis Felipe Abarca",
   "icons": {
