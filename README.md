@@ -50,7 +50,7 @@ Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-mo
 
 ## Limitations
 
-- Photoreal DALL-E 3 can still score below 65%. A center crop around 4% skips extra TTA crops on purpose (max of six 4% scores would not cross 65%). Images in the 15-65% band get extra crops; they still have to beat 0.65 on a real sigmoid. CommunityForensics FP32 stays the head so ordinary camera photos are not burned. Not 75% on the private POIDH benchmark.
+- Photoreal DALL-E 3 can still score below 65%. On the Wikimedia copies of the named fixture gens, `crying-robot` center 0.236 is in the TTA band and extra crops reach 0.985; `pluto` center 0.137 stays a miss (other crops were lower). Confident-real centers below 0.15 skip extra crops. CommunityForensics FP32 stays the head. Not 75% on the private POIDH benchmark.
 - New generators, stripped metadata, CORS-blocked images, and tiny thumbnails are weaker or skipped.
 - Camera Make/Model in EXIF is not proof of a real photo.
 

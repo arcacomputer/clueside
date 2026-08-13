@@ -62,7 +62,7 @@ The logical pipeline matches `preprocessor_config.json`, but resize interpolatio
 
 ## Fixture observation (n=19 public set, not a bounty claim)
 
-The n=19 maintainer gallery is not in git. Re-run locally with `npm run eval -- /path/to/fixture` (adaptive is the default). Prior center-only harness numbers at raw 0.65:
+The n=19 maintainer gallery is not in git (Unsplash/Pexels reals are local). Re-run locally with `npm run eval -- /path/to/fixture` (adaptive is the default). Prior center-only harness numbers at raw 0.65:
 
 | Metric | Center-only harness |
 |--------|---------------------|
@@ -82,7 +82,24 @@ Chrome gallery (same 19, center crop, raw 0.65): reals OK in the 0-25% band; sev
 
 `mars` scored 0.539 in a separate AutoProcessor experiment but 0.878 here, which illustrates the preprocessing path difference above. `n=19` is a small public fixture, not proof of 75% on the private bounty benchmark.
 
-If `--tta=always` ever flags one of the 10 real fixture photos at 0.65, keep `--tta=adaptive` (the production default). Do not ship Six-Fingers logit bias, int8/q4 as the primary head, or a 0.5-to-0.65 remap.
+### Wikimedia probe (this PR, not the private n=19 folder)
+
+Same named DALL-E 3 files from Commons (`mars`, `pluto`, `crying-robot`) plus 4 other gens and 10 camera photos. Harness `--tta=always` at raw 0.65, official 440 preprocess, max of sigmoid (early-exit at 0.9):
+
+| Split | Result |
+|-------|--------|
+| AI recall | 6/7 (pluto miss) |
+| Real recall | 10/10 (highest always-max 0.218 on eiffel) |
+| Balanced accuracy | 92.86% |
+
+| Image | Center | Always-max | Adaptive (band `[0.15, 0.65)`) | @ 0.65 |
+|-------|--------|------------|--------------------------------|--------|
+| mars | 0.878 | 0.960 (tl) | center only (already >= 0.65) | hit |
+| crying-robot | 0.236 | 0.985 (`center_512`) | extras run, 0.985 | hit |
+| pluto | 0.137 | 0.137 (extras lower) | extras skipped (`< 0.15`) | miss |
+| skin | 0.033 | 0.766 (`center_512`) | extras skipped | miss (adaptive) / hit (always) |
+
+Production stays **adaptive**: it lifts `crying-robot` without running six crops on confident reals or on `pluto`. Always-max did not burn TNR on this 10-real proxy, but the Unsplash/Pexels fixture 10 were not available here. Do not ship Six-Fingers logit bias, int8/q4 as the primary head, or a 0.5-to-0.65 remap.
 
 ### Prior heads on the same fixture (for context)
 
@@ -91,7 +108,7 @@ If `--tta=always` ever flags one of the 10 real fixture photos at 0.65, keep `--
 | 5-class `ai-source-detector` (`1-p(real)`) | 8/9 | 3/10 | 59.44% |
 | `max(AI head)` (PR #2) | 0/9 | 10/10 | 50.00% |
 | distilled binary (PR #3) | 0/9 | 10/10 | 50.00% |
-| CommunityForensics harness (this repo) | 7/9 | 10/10 | 88.89% |
+| CommunityForensics center-only harness (n=19) | 7/9 | 10/10 | 88.89% |
 
 ## Bounty alignment
 
