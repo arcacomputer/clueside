@@ -64,16 +64,16 @@ npm run eval -- /path/to/19-image-fixture --sweep
 
 ### Wikimedia proxy (3 real photos, Aug 2026)
 
-Scores at 0.65 threshold on public Wikimedia JPEGs (`cat`, `food`, `puppies`):
+Scores at 0.65 threshold on public Wikimedia JPEGs (`cat`, `food`, `puppies`). Inference is cached once per file during `--sweep` so strategies share the same model outputs.
 
 | Strategy | cat | food | puppies | FP @ 0.65 |
 |----------|-----|------|---------|-----------|
-| legacy | 0.83 | 0.67 | 0.74 | 2/3 |
-| hybrid | 0.83 | 0.19 | 0.25 | 1/3 |
-| max_ai | 0.44 | 0.19 | 0.26 | 0/3 |
-| distilled | 0.30 | 0.42 | 0.56 | 0/3 |
+| legacy | 0.87 | 0.64 | 0.83 | 2/3 |
+| hybrid | 0.87 | 0.19 | 0.83 | 2/3 |
+| max_ai | 0.41 | 0.19 | 0.45 | 0/3 |
+| distilled | 0.30 | 0.61 | 0.25 | 0/3 |
 
-Proxy set is tiny and real-only; it does not estimate AI recall. It shows why `max_ai` and raw `1-p(real)` inflate spread-mass photos, and why the distilled binary head lowers false positives on these samples.
+Hybrid only helps when the 5-class argmax is `real` (food here). When argmax is an AI class on a real photo (cat, puppies), hybrid still uses `1-p(real)` and false positives remain. Distilled binary scores stay below 0.65 on all three.
 
 ### CIFAKE binary (not shipped)
 

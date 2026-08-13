@@ -102,11 +102,21 @@ function parseArgs(argv) {
   return { dir: resolve(dir), strategy, sweep };
 }
 
-async function scoreFile(primary, hints, filePath, label, strategy) {
+async function inferFile(primary, hints, filePath) {
   const buffer = await readFile(filePath);
   const [distilledOutputs, sourceOutputs] = await Promise.all([primary(filePath), hints(filePath)]);
-  const neuralPAi = neuralPAiForStrategy(strategy, distilledOutputs, sourceOutputs);
-  const fused = fuseScores(neuralPAi, await analyzeHeuristics(buffer, filePath), DEFAULT_THRESHOLD);
+  const heuristics = await analyzeHeuristics(buffer, filePath);
+
+  return { buffer, distilledOutputs, sourceOutputs, heuristics };
+}
+
+function scoreInference(filePath, label, strategy, inference) {
+  const neuralPAi = neuralPAiForStrategy(
+    strategy,
+    inference.distilledOutputs,
+    inference.sourceOutputs
+  );
+  const fused = fuseScores(neuralPAi, inference.heuristics, DEFAULT_THRESHOLD);
 
   return {
     file: filePath,
@@ -135,6 +145,11 @@ async function main() {
   }
 
   const strategies = sweep ? [...STRATEGIES] : [strategy];
+  const inferenceByPath = new Map();
+
+  for (const { path } of files) {
+    inferenceByPath.set(path, await inferFile(primary, hints, path));
+  }
 
   for (const current of strategies) {
     if (sweep) {
@@ -145,7 +160,7 @@ async function main() {
 
     const rows = [];
     for (const { path, label } of files) {
-      const row = await scoreFile(primary, hints, path, label, current);
+      const row = scoreInference(path, label, current, inferenceByPath.get(path));
       rows.push(row);
       console.log(
         `${row.file},${row.label || ''},${row.strategy},${row.raw_score.toFixed(4)},${row.neural_score.toFixed(4)},${row.verdict},${row.predicted_ai},"${row.reasons}"`
