@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hybrid AI Image Detector</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      width: 320px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+    header {
+      padding: 12px 14px 8px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .sub {
+      margin: 4px 0 0;
+      font-size: 11px;
+      color: #666;
+    }
+    main { padding: 12px 14px 14px; }
+    label { display: block; margin-bottom: 12px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    input[type="range"] { width: 100%; }
+    .drop {
+      border: 2px dashed #bbb;
+      border-radius: 8px;
+      padding: 18px 12px;
+      text-align: center;
+      color: #555;
+      background: #fff;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .drop.drag { border-color: #1565c0; background: #e3f2fd; }
+    #result {
+      min-height: 48px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+    .verdict-ai { color: #c62828; font-weight: 700; }
+    .verdict-uncertain { color: #ef6c00; font-weight: 700; }
+    .verdict-real { color: #2e7d32; font-weight: 700; }
+    footer {
+      padding: 8px 14px 12px;
+      font-size: 10px;
+      color: #777;
+      border-top: 1px solid #e0e0e0;
+    }
+    .toggle { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Hybrid AI Image Detector</h1>
+    <p class="sub">All analysis runs on your device. Images never leave the browser.</p>
+  </header>
+  <main>
+    <label class="toggle row">
+      <span>Auto-scan pages</span>
+      <input type="checkbox" id="autoScan" checked />
+    </label>
+    <label class="toggle row">
+      <span>Extension enabled</span>
+      <input type="checkbox" id="enabled" checked />
+    </label>
+    <label>
+      <div class="row">
+        <span>Threshold (raw p(AI))</span>
+        <strong id="thresholdVal">65%</strong>
+      </div>
+      <input type="range" id="threshold" min="50" max="90" value="65" />
+    </label>
+    <div class="drop" id="dropZone">
+      Drop an image here or click to choose
+      <input type="file" id="fileInput" accept="image/*" hidden />
+    </div>
+    <div id="result">No file analyzed yet.</div>
+  </main>
+  <footer>
+    MIT License. Author: Luis Felipe Abarca.
+  </footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
