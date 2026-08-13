@@ -85,6 +85,89 @@
       cursor: pointer;
       padding: 0;
     }
+    .walkthrough {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid #bbdefb;
+      border-radius: 8px;
+      background: #e3f2fd;
+    }
+    .walkthrough h2 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .walkthrough ol {
+      margin: 0 0 8px;
+      padding-left: 18px;
+    }
+    .walkthrough li { margin-bottom: 4px; }
+    .walkthrough .hint {
+      margin: 0 0 8px;
+      color: #555;
+      font-size: 12px;
+    }
+    .walkthrough button {
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      background: #1565c0;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .walkthrough[hidden] { display: none; }
+    .legend {
+      margin-bottom: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-bottom: 6px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-badge {
+      display: inline-block;
+      min-width: 1.6em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.3;
+    }
+    .legend-badge.ai { background: #c62828; }
+    .legend-badge.ok { background: #2e7d32; }
+    .legend-badge.uncertain { background: #ef6c00; }
+    .legend-badge.skip { background: #757575; }
+    .legend-help {
+      margin: 0;
+      color: #666;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .drop-label {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .drop-hint {
+      font-size: 11px;
+      color: #777;
+    }
   </style>
 </head>
 <body>
@@ -101,6 +184,25 @@
     </div>
   </div>
   <main>
+    <section id="walkthrough" class="walkthrough" hidden>
+      <h2>How to use</h2>
+      <ol>
+        <li>Pin the toolbar icon (Chrome puzzle, then pin).</li>
+        <li>Reload the tab you are on.</li>
+        <li>Wait for badges on large images (green OK or red AI).</li>
+      </ol>
+      <p class="hint">Optional: drop a file in the popup to check one image.</p>
+      <button type="button" id="walkthroughDismiss">Got it</button>
+    </section>
+    <div class="legend" id="legend" aria-label="Badge legend">
+      <div class="legend-items">
+        <span class="legend-item"><span class="legend-badge ai">AI</span> likely generated</span>
+        <span class="legend-item"><span class="legend-badge ok">OK</span> likely a real photo</span>
+        <span class="legend-item"><span class="legend-badge uncertain">?</span> not sure</span>
+        <span class="legend-item"><span class="legend-badge skip">skip</span> could not read that image</span>
+      </div>
+      <p class="legend-help">Percentage is p(AI). We label AI at 65% or higher. Analysis stays on this device.</p>
+    </div>
     <label class="toggle row">
       <span>Auto-scan pages</span>
       <input type="checkbox" id="autoScan" checked />
@@ -117,7 +219,8 @@
       <input type="range" id="threshold" min="50" max="90" value="65" />
     </label>
     <div class="drop" id="dropZone">
-      Drop an image here or click to choose
+      <div class="drop-label">Check one image</div>
+      <div class="drop-hint">Drop here or click to choose</div>
       <input type="file" id="fileInput" accept="image/*" hidden />
     </div>
     <div id="result">No file analyzed yet.</div>

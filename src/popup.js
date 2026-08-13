@@ -1,4 +1,8 @@
 import { bytesToBase64 } from './bytes.js';
+import {
+  WALKTHROUGH_STORAGE_KEY,
+  shouldShowWalkthrough,
+} from './walkthrough.js';
 
 const thresholdEl = document.getElementById('threshold');
 const thresholdVal = document.getElementById('thresholdVal');
@@ -11,6 +15,8 @@ const updateBanner = document.getElementById('updateBanner');
 const updateVersion = document.getElementById('updateVersion');
 const updateLink = document.getElementById('updateLink');
 const dismissUpdate = document.getElementById('dismissUpdate');
+const walkthroughEl = document.getElementById('walkthrough');
+const walkthroughDismissEl = document.getElementById('walkthroughDismiss');
 
 async function loadSettings() {
   const settings = await chrome.runtime.sendMessage({ type: 'get-settings' });
@@ -152,7 +158,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+async function initWalkthrough() {
+  const stored = await chrome.storage.local.get({ [WALKTHROUGH_STORAGE_KEY]: false });
+  if (shouldShowWalkthrough(stored)) {
+    walkthroughEl.hidden = false;
+  }
+
+  walkthroughDismissEl.addEventListener('click', async () => {
+    walkthroughEl.hidden = true;
+    await chrome.storage.local.set({ [WALKTHROUGH_STORAGE_KEY]: true });
+  });
+}
+
 loadSettings();
+initWalkthrough();
 refreshUpdateBanner();
 chrome.runtime.sendMessage({ type: 'check-update' }).then((status) => {
   if (status) renderUpdateBanner(status);
