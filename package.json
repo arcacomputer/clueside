@@ -1,6 +1,6 @@
 {
   "name": "hybrid-ai-image-detector",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Local MV3 Chrome extension for AI-generated image detection",
   "type": "module",
   "author": "Luis Felipe Abarca",
