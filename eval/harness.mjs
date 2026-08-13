@@ -40,11 +40,13 @@ async function ensureSession() {
     throw new Error(`Model weights missing at ${modelPath}. Run: npm run fetch-model`);
   }
 
-  session = await createCommunityForensicsSession({
+  const { session: createdSession } = await createCommunityForensicsSession({
     modelUrl: modelPath,
     wasmPaths: join(ROOT, 'node_modules', 'onnxruntime-web', 'dist') + '/',
-    useWebGpu: false,
+    preferWebGpu: false,
+    verifyWasmAssets: false,
   });
+  session = createdSession;
 
   return session;
 }

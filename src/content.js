@@ -70,16 +70,30 @@ function placeBadge(el, badge) {
   badge.style.left = `${rect.left + 4}px`;
 }
 
+function shortError(message) {
+  if (!message) return 'Error';
+  const cleaned = String(message).replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= 16) return cleaned;
+  return `${cleaned.slice(0, 13)}...`;
+}
+
 function renderBadge(el, result) {
   const badge = ensureBadge(el);
   placeBadge(el, badge);
 
   badge.classList.remove('haid-pending', 'haid-ai', 'haid-uncertain', 'haid-real', 'haid-skip', 'haid-error');
 
-  if (result.skipped || result.error) {
+  if (result.error) {
+    badge.classList.add('haid-uncertain');
+    badge.textContent = shortError(result.error);
+    badge.title = result.error;
+    return;
+  }
+
+  if (result.skipped) {
     badge.classList.add('haid-skip');
-    badge.textContent = result.error ? '?' : '-';
-    badge.title = result.reason || result.error || 'Skipped';
+    badge.textContent = '-';
+    badge.title = result.reason || 'Skipped';
     return;
   }
 
