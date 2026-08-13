@@ -1,5 +1,4 @@
 const OFFSCREEN_URL = 'offscreen.html';
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const MIN_DIMENSION = 96;
 
 let offscreenCreating = null;
@@ -53,31 +52,14 @@ function isHttpUrl(url) {
   return typeof url === 'string' && /^https?:\/\//i.test(url);
 }
 
-async function fetchImageBytes(url) {
-  const res = await fetch(url, { credentials: 'omit', cache: 'force-cache' });
-  if (!res.ok) {
-    throw new Error(`Fetch failed (${res.status})`);
-  }
-
-  const type = res.headers.get('content-type') || '';
-  if (!type.startsWith('image/')) {
-    throw new Error('Not an image content-type');
-  }
-
-  const cl = Number(res.headers.get('content-length') || 0);
-  if (cl > MAX_IMAGE_BYTES) {
-    throw new Error('Image exceeds size cap');
-  }
-
-  const buffer = await res.arrayBuffer();
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error('Image exceeds size cap');
-  }
-
-  return buffer;
-}
-
-async function analyzeRequest({ requestId, tabId, url, buffer, width, height, source, threshold: customThreshold }) {
+/**
+ * Image bytes never travel through this service worker. sendMessage
+ * JSON-serializes payloads, so ArrayBuffers arrive as undefined on the
+ * other side. The offscreen document fetches http(s) URLs itself;
+ * blob/data and file-drop payloads arrive here already base64-encoded
+ * and are forwarded as strings.
+ */
+async function analyzeRequest({ requestId, tabId, url, bufferB64, width, height, source, threshold: customThreshold }) {
   const settings = await getSettings();
   if (!settings.enabled) {
     return { skipped: true, reason: 'Extension disabled' };
@@ -92,7 +74,7 @@ async function analyzeRequest({ requestId, tabId, url, buffer, width, height, so
   try {
     const response = await sendToOffscreen({
       type: 'analyze',
-      buffer,
+      bufferB64,
       url,
       threshold,
     });
@@ -117,36 +99,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.type === 'analyze-url') {
       const tabId = sender.tab?.id;
-      try {
-        const buffer = await fetchImageBytes(message.url);
-        const result = await analyzeRequest({
-          requestId: message.requestId,
-          tabId,
-          url: message.url,
-          buffer,
-          width: message.width,
-          height: message.height,
-          source: message.source,
-        });
-        sendResponse(result);
-      } catch (err) {
+      if (!isHttpUrl(message.url)) {
         sendResponse({
           requestId: message.requestId,
           tabId,
           url: message.url,
-          error: err.message || String(err),
+          error: 'Unsupported URL scheme for URL analysis',
         });
+        return;
       }
+      const result = await analyzeRequest({
+        requestId: message.requestId,
+        tabId,
+        url: message.url,
+        width: message.width,
+        height: message.height,
+        source: message.source,
+      });
+      sendResponse(result);
       return;
     }
 
     if (message.type === 'analyze-buffer') {
       const tabId = sender.tab?.id;
+      if (typeof message.bufferB64 !== 'string' || message.bufferB64.length === 0) {
+        sendResponse({
+          requestId: message.requestId,
+          tabId,
+          url: message.url,
+          error: 'Missing image payload (expected base64 bytes)',
+        });
+        return;
+      }
       const result = await analyzeRequest({
         requestId: message.requestId,
         tabId,
         url: message.url,
-        buffer: message.buffer,
+        bufferB64: message.bufferB64,
         width: message.width,
         height: message.height,
         source: message.source,
