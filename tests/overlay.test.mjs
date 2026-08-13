@@ -14,15 +14,45 @@ describe('overlay badges do not wrap images', () => {
     assert.doesNotMatch(content, /className = 'haid-wrap'/);
     assert.match(content, /position = 'fixed'/);
     assert.match(content, /pickImageUrl/);
-    assert.match(content, /ANALYZE_TIMEOUT_MS/);
+    assert.match(content, /createAnalyzeQueue/);
+    assert.match(content, /AFTER_START_SAFETY_MS/);
+    assert.match(content, /FETCH_TIMEOUT_MS/);
+    assert.match(content, /ttaMode/);
+    assert.doesNotMatch(content, /ANALYZE_TIMEOUT_MS/);
+    assert.doesNotMatch(content, /timeoutMessage: 'Timed out'/);
     assert.match(content, /scheduleReposition/);
     assert.equal(content.includes('\u2014'), false);
+  });
+
+  it('does not start the fetch clock when the badge is painted', async () => {
+    const content = await readFile(join(ROOT, 'src/content.js'), 'utf8');
+    assert.match(content, /inFlight.add\(el\);\s*ensureBadge\(el\);\s*analyzeQueue/s);
   });
 
   it('does not style a wrapping host around photos', async () => {
     const css = await readFile(join(ROOT, 'src/overlay.css'), 'utf8');
     assert.doesNotMatch(css, /\.haid-wrap/);
     assert.match(css, /position:\s*fixed/);
+  });
+});
+
+describe('analyze clocks are split', () => {
+  it('offscreen times fetch and inference separately and serializes ORT', async () => {
+    const offscreen = await readFile(join(ROOT, 'src/offscreen.js'), 'utf8');
+    assert.match(offscreen, /FETCH_TIMEOUT_MS/);
+    assert.match(offscreen, /INFERENCE_TIMEOUT_MS/);
+    assert.match(offscreen, /runExclusiveAfterStart/);
+    assert.match(offscreen, /preprocessBitmap/);
+    assert.match(offscreen, /ttaMode/);
+    assert.match(offscreen, /Image fetch timed out/);
+    assert.match(offscreen, /Inference timed out/);
+    assert.equal(offscreen.includes('\u2014'), false);
+  });
+
+  it('background forwards ttaMode to offscreen', async () => {
+    const background = await readFile(join(ROOT, 'src/background.js'), 'utf8');
+    assert.match(background, /ttaMode/);
+    assert.match(background, /ttaMode: message.ttaMode/);
   });
 });
 
@@ -43,6 +73,8 @@ describe('portable install copy', () => {
     assert.doesNotMatch(readme, /\/Applications\//);
     assert.doesNotMatch(readme, /C:\\\\Users/);
     assert.doesNotMatch(readme, /AppData/);
+    assert.doesNotMatch(readme, /within about 8 seconds/);
+    assert.match(readme, /tens of seconds/);
     assert.equal(readme.includes('\u2014'), false);
   });
 });

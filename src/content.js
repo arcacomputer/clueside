@@ -5,8 +5,10 @@ import {
   withRetries,
   withAnalyzeDeadline,
   toSkipResult,
-  ANALYZE_TIMEOUT_MS,
+  FETCH_TIMEOUT_MS,
+  AFTER_START_SAFETY_MS,
 } from './analyze-retry.js';
+import { createAnalyzeQueue } from './analyze-queue.js';
 import { pickImageUrl } from './image-url.js';
 
 const MIN_SIZE = 96;
@@ -160,8 +162,8 @@ function renderBadge(el, result) {
   }
 
   if (result.error) {
-    badge.classList.add('haid-uncertain');
-    badge.textContent = shortError(result.error);
+    badge.classList.add('haid-error');
+    badge.textContent = /inference/i.test(result.error) ? 'error' : shortError(result.error);
     badge.title = result.error;
     return;
   }
@@ -210,7 +212,7 @@ function finalizeResult(el, result) {
   }
 }
 
-async function analyzeHttpUrl(el, url, source) {
+async function analyzeHttpUrl(el, url, source, ttaMode) {
   const { width, height } = elementSize(el);
   ensureBadge(el);
 
@@ -224,22 +226,41 @@ async function analyzeHttpUrl(el, url, source) {
           width,
           height,
           source,
+          ttaMode,
         });
         return response || { error: 'No response from extension' };
       }),
-    { timeoutMs: ANALYZE_TIMEOUT_MS, timeoutMessage: 'Timed out' }
+    { timeoutMs: AFTER_START_SAFETY_MS, timeoutMessage: 'Inference timed out' }
   );
 
   finalizeResult(el, result);
 }
 
-async function analyzeBlobOrData(el, url, source) {
+async function fetchBlobOrData(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`Image fetch failed (${res.status})`);
+    }
+    return res.arrayBuffer();
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Image fetch timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function analyzeBlobOrData(el, url, source, ttaMode) {
   const { width, height } = elementSize(el);
   ensureBadge(el);
 
   try {
-    const res = await fetch(url);
-    const buffer = await res.arrayBuffer();
+    const buffer = await fetchBlobOrData(url);
     const bufferB64 = bytesToBase64(buffer);
 
     const result = await withAnalyzeDeadline(
@@ -253,18 +274,43 @@ async function analyzeBlobOrData(el, url, source) {
             width,
             height,
             source,
+            ttaMode,
           });
           return response || { error: 'No response from extension' };
         }),
-      { timeoutMs: ANALYZE_TIMEOUT_MS, timeoutMessage: 'Timed out' }
+      { timeoutMs: AFTER_START_SAFETY_MS, timeoutMessage: 'Inference timed out' }
     );
 
     finalizeResult(el, result);
   } catch (err) {
-    renderBadge(el, toSkipResult(err?.message || 'Cannot read blob/data URL'));
+    const message = err?.message || 'Cannot read blob/data URL';
+    if (isFetchSkipError(message)) {
+      renderBadge(el, toSkipResult(message));
+    } else {
+      renderBadge(el, { error: message });
+    }
     markFinal(el);
   }
 }
+
+async function runAnalyzeJob({ el, url, source }, { ttaMode }) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    await analyzeBlobOrData(el, url, source, ttaMode);
+    return;
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    await analyzeHttpUrl(el, url, source, ttaMode);
+    return;
+  }
+
+  renderBadge(el, { skipped: true, reason: 'Unsupported URL scheme' });
+  markFinal(el);
+}
+
+const analyzeQueue = createAnalyzeQueue({
+  run: runAnalyzeJob,
+});
 
 function queueImage(el, url, source) {
   if (!enabled || !autoScan || !url) return;
@@ -273,27 +319,16 @@ function queueImage(el, url, source) {
   if (!isVisible(el)) return;
 
   inFlight.add(el);
+  ensureBadge(el);
 
-  const run = async () => {
-    try {
-      if (url.startsWith('blob:') || url.startsWith('data:')) {
-        await analyzeBlobOrData(el, url, source);
-        return;
-      }
-
-      if (/^https?:\/\//i.test(url)) {
-        await analyzeHttpUrl(el, url, source);
-        return;
-      }
-
-      renderBadge(el, { skipped: true, reason: 'Unsupported URL scheme' });
-      markFinal(el);
-    } finally {
+  analyzeQueue
+    .enqueue({ el, url, source })
+    .catch((err) => {
+      finalizeResult(el, { error: err?.message || String(err) });
+    })
+    .finally(() => {
       inFlight.delete(el);
-    }
-  };
-
-  run();
+    });
 }
 
 function scanImg(el) {
