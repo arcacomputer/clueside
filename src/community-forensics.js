@@ -15,6 +15,18 @@ import {
 
 const REQUIRED_WASM_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
 
+/** ORT session option: OrtLoggingLevel::ORT_LOGGING_LEVEL_ERROR (suppresses W: lines). */
+const ORT_SESSION_LOG_OPTIONS = { logSeverityLevel: 3 };
+
+/**
+ * ONNX Runtime logs routine WebGPU/WASM placement warnings at severity "warning".
+ * Chrome lists extension console.warn on chrome://extensions as Errors, so keep ORT
+ * at error/fatal only. Real session failures still propagate as thrown errors.
+ */
+function configureOrtLogging() {
+  ort.env.logLevel = 'error';
+}
+
 /**
  * @param {GPUAdapter | null | undefined} adapter
  */
@@ -183,6 +195,7 @@ export async function predictAdaptiveViews(session, views, options = {}) {
  * @returns {Promise<{ session: ort.InferenceSession, device: 'webgpu' | 'wasm' }>}
  */
 export async function createCommunityForensicsSession(options) {
+  configureOrtLogging();
   ort.env.wasm.wasmPaths = options.wasmPaths;
   ort.env.wasm.numThreads = 1;
 
@@ -194,6 +207,7 @@ export async function createCommunityForensicsSession(options) {
     try {
       const session = await ort.InferenceSession.create(options.modelUrl, {
         executionProviders: ['webgpu'],
+        ...ORT_SESSION_LOG_OPTIONS,
       });
       return { session, device: 'webgpu' };
     } catch (err) {
@@ -205,6 +219,7 @@ export async function createCommunityForensicsSession(options) {
 
   const session = await ort.InferenceSession.create(options.modelUrl, {
     executionProviders: ['wasm'],
+    ...ORT_SESSION_LOG_OPTIONS,
   });
   return { session, device: 'wasm' };
 }
