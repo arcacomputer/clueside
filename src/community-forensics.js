@@ -201,6 +201,8 @@ export async function createCommunityForensicsSession(options) {
     }
   }
 
+  // Linux VMs and some Windows/Mac GPUs have no adapter. WASM is required.
+
   const session = await ort.InferenceSession.create(options.modelUrl, {
     executionProviders: ['wasm'],
   });

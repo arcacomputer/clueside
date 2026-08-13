@@ -11,9 +11,9 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 
 1. Download the zip from [Releases](https://github.com/felirami/hybrid-ai-image-detector/releases/latest).
 2. Extract it.
-3. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the extracted folder (the one with `manifest.json`).
+3. Open `chrome://extensions` (same on Mac, Windows, and Linux), enable **Developer mode**, click **Load unpacked**, and select the extracted folder. `manifest.json` is at the root of that folder.
 
-The zip already includes CommunityForensics ONNX weights. No extra download.
+The zip already includes CommunityForensics ONNX weights. No extra download. Inference uses WebGPU when Chrome exposes an adapter, otherwise WASM. WebGPU is not required.
 
 ### From source
 
@@ -29,9 +29,9 @@ Maintainers cut a release with `git tag v1.0.0 && git push origin v1.0.0`. That 
 
 ## Usage
 
-- Large page images (96px or wider/taller) get overlay badges after local analysis.
+- Large page images (96px or wider/taller) get overlay badges after local analysis. Badges are `position:fixed` and follow the image on scroll. The extension never wraps or replaces `<img>` or `<picture>`.
 - Toolbar popup: auto-scan, raw threshold (default 65%), drop a file.
-- Badges: red = AI at threshold, orange = uncertain (45-65% raw), green = below that band.
+- Badges: red = AI at threshold, orange = uncertain (45-65% raw), green = below that band. Pending `...` becomes a score, `skip`, or error within about 8 seconds.
 
 ## How scoring works
 

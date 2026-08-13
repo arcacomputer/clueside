@@ -1,13 +1,5 @@
-.haid-wrap {
-  position: relative;
-  max-width: 100%;
-  vertical-align: middle;
-}
-
 .haid-badge {
-  position: absolute;
-  top: 4px;
-  left: 4px;
+  position: fixed;
   z-index: 2147483646;
   pointer-events: none;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
