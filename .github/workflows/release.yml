@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run fetch-model
+
+      - run: npm run package
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zip=(release/hybrid-ai-image-detector-*.zip)
+          if [ ${#zip[@]} -eq 0 ]; then
+            echo "No zip in release/. npm run package must write hybrid-ai-image-detector-*.zip"
+            exit 1
+          fi
+          printf '%s\n' \
+            'Unpacked Chrome extension. Download the zip, extract it, then Load unpacked in chrome://extensions (Developer mode). Pick the folder that contains manifest.json.' \
+            '' \
+            'The zip includes CommunityForensics FP32 ONNX and WASM. Images stay on your device. MIT. Author: Luis Felipe Abarca.' \
+            '' \
+            'This is a GitHub Release, not a Chrome Web Store listing. Public fixture numbers are not a private-benchmark claim.' \
+            > /tmp/release-notes.md
+          gh release create "${GITHUB_REF_NAME}" "${zip[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/release-notes.md
