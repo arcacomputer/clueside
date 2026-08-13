@@ -13,6 +13,7 @@
     "eval": "node eval/harness.mjs"
   },
   "dependencies": {
+    "@contentauth/c2pa-web": "^0.13.4",
     "@huggingface/transformers": "^3.4.2",
     "exifr": "^7.1.3"
   },

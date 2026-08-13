@@ -3,6 +3,7 @@
  */
 
 import exifr from 'exifr';
+import { readC2paAiSignal } from './c2pa-reader.js';
 
 const AI_SOFTWARE_PATTERNS = [
   /midjourney/i,
@@ -47,7 +48,7 @@ export async function analyzeHeuristics(buffer, url = '') {
   const bytes = new Uint8Array(buffer);
   const reasons = [];
 
-  const c2pa = parseC2pa(bytes);
+  const c2pa = await resolveC2pa(bytes);
   if (c2pa.ai) reasons.push(c2pa.reason);
 
   const exif = await parseExifMetadata(buffer);
@@ -73,9 +74,20 @@ export async function analyzeHeuristics(buffer, url = '') {
 }
 
 /**
+ * Prefer c2pa-web in the extension offscreen context; fall back to byte scan.
  * @param {Uint8Array} bytes
  */
-export function parseC2pa(bytes) {
+export async function resolveC2pa(bytes) {
+  const fromSdk = await readC2paAiSignal(bytes);
+  if (fromSdk) return fromSdk;
+  return parseC2paScan(bytes);
+}
+
+/**
+ * Latin-1 substring scan for C2PA markers (fallback when SDK unavailable).
+ * @param {Uint8Array} bytes
+ */
+export function parseC2paScan(bytes) {
   const marker = asciiBytes('c2pa');
   const jumbMarker = asciiBytes('jumb');
 

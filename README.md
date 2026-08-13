@@ -44,7 +44,7 @@ On first run, if `models/` is missing from the packed extension, the offscreen w
 
 1. **Neural:** 5-class softmax from the ONNX model. `p(AI) = 1 - p(real)`. Generator class names are optional hints only.
 2. **Metadata:** C2PA trained/composite algorithmic media, EXIF Software/CreatorTool/DigitalSourceType, A1111/ComfyUI PNG text, JPEG comments.
-3. **URL hints:** Weak +0.05 max, never enough alone to cross 65% from a low neural score.
+3. **URL hints:** Weak +0.05 max, capped so they never push a sub-threshold neural score over 65% alone.
 4. **Fusion:** Strong metadata forces 0.95-0.99. Otherwise neural score plus weak bonuses. Eval is binary at raw >= 0.65.
 
 ## Tests
@@ -55,7 +55,7 @@ npm test
 
 ## Evaluation harness
 
-See `eval/README.md` and run `npm run eval` for a local folder scorer (requires built model).
+See `eval/README.md` and run `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. Reports per-image CSV plus balanced accuracy at raw 0.65 when `ai/` and `real/` subfolders exist.
 
 ## Limitations
 
@@ -65,6 +65,7 @@ See `eval/README.md` and run `npm run eval` for a local folder scorer (requires 
 - Small thumbnails, icons, and decorative images are skipped.
 - Camera Make/Model in EXIF is not proof of a real photo.
 - Frequency residual and URL hints are weak signals only.
+- C2PA: the extension uses `@contentauth/c2pa-web` (local WASM) in the offscreen document when available, with a byte-scan fallback. The Node eval harness uses the fallback only. Malformed or partial manifests may be missed by the fallback.
 
 ## Privacy
 

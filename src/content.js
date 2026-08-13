@@ -1,8 +1,10 @@
 const MIN_SIZE = 96;
-const seen = new WeakSet();
+const seenGeneration = new WeakMap();
 const badgeByEl = new WeakMap();
 let enabled = true;
 let autoScan = true;
+let scanGeneration = 0;
+let observersReady = false;
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -152,10 +154,11 @@ async function analyzeBlobOrData(el, url, source) {
 }
 
 function queueImage(el, url, source) {
-  if (!enabled || !autoScan || !url || seen.has(el)) return;
+  if (!enabled || !autoScan || !url) return;
+  if (seenGeneration.get(el) === scanGeneration) return;
   if (!isVisible(el)) return;
 
-  seen.add(el);
+  seenGeneration.set(el, scanGeneration);
 
   if (url.startsWith('blob:') || url.startsWith('data:')) {
     analyzeBlobOrData(el, url, source);
@@ -172,6 +175,7 @@ function queueImage(el, url, source) {
 
 function scanImg(el) {
   if (!(el instanceof HTMLImageElement)) return;
+  if (!enabled || !autoScan) return;
 
   const candidates = new Set();
   if (el.currentSrc) candidates.add(el.currentSrc);
@@ -191,6 +195,7 @@ function scanImg(el) {
 }
 
 function scanBackground(el) {
+  if (!enabled || !autoScan) return;
   for (const url of collectBackgroundUrls(el)) {
     queueImage(el, url, 'background');
   }
@@ -245,28 +250,24 @@ const mutationObserver = new MutationObserver((mutations) => {
     }
 
     if (mutation.type === 'attributes' && mutation.target instanceof HTMLImageElement) {
-      seen.delete(mutation.target);
+      seenGeneration.delete(mutation.target);
       scanImg(mutation.target);
     }
   }
 });
 
-async function bootstrap() {
-  const settings = await chrome.runtime.sendMessage({ type: 'get-settings' });
-  enabled = settings.enabled !== false;
-  autoScan = settings.autoScan !== false;
+function rescanAll() {
+  scanGeneration += 1;
+  document.querySelectorAll('img').forEach(scanImg);
+  document.querySelectorAll('*').forEach(scanBackground);
+}
 
-  if (!enabled || !autoScan) return;
+function attachObservers() {
+  if (observersReady) return;
+  observersReady = true;
 
-  document.querySelectorAll('img').forEach((img) => {
-    watch(img);
-    scanImg(img);
-  });
-
-  document.querySelectorAll('*').forEach((el) => {
-    scanBackground(el);
-    watch(el);
-  });
+  document.querySelectorAll('img').forEach(watch);
+  document.querySelectorAll('*').forEach(watch);
 
   mutationObserver.observe(document.documentElement, {
     childList: true,
@@ -274,8 +275,6 @@ async function bootstrap() {
     attributes: true,
     attributeFilter: ['src', 'srcset', 'style', 'class'],
   });
-
-  chrome.runtime.sendMessage({ type: 'warmup' });
 
   window.addEventListener(
     'scroll',
@@ -298,10 +297,34 @@ async function bootstrap() {
   );
 }
 
+async function bootstrap() {
+  const settings = await chrome.runtime.sendMessage({ type: 'get-settings' });
+  enabled = settings.enabled !== false;
+  autoScan = settings.autoScan !== false;
+
+  attachObservers();
+
+  if (enabled && autoScan) {
+    rescanAll();
+    chrome.runtime.sendMessage({ type: 'warmup' });
+  }
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
+
+  const wasEnabled = enabled;
+  const wasAutoScan = autoScan;
+
   if (changes.enabled) enabled = changes.enabled.newValue !== false;
   if (changes.autoScan) autoScan = changes.autoScan.newValue !== false;
+
+  if ((!wasEnabled && enabled) || (!wasAutoScan && autoScan)) {
+    rescanAll();
+    if (enabled && autoScan) {
+      chrome.runtime.sendMessage({ type: 'warmup' });
+    }
+  }
 });
 
 bootstrap();

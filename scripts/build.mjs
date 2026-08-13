@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, rm, readFile, writeFile, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -18,41 +18,60 @@ const ENTRY_POINTS = {
   'offscreen.js': join(ROOT, 'src/offscreen.js'),
 };
 
+const REQUIRED_WASM = [
+  'ort-wasm-simd-threaded.wasm',
+  'ort-wasm-simd-threaded.mjs',
+];
+
+const OPTIONAL_WASM = [
+  'ort-wasm-simd-threaded.jsep.wasm',
+  'ort-wasm-simd-threaded.asyncify.wasm',
+  'ort-wasm-simd-threaded.jsep.mjs',
+  'ort-wasm-simd-threaded.asyncify.mjs',
+];
+
+async function mustExist(path, label) {
+  try {
+    await access(path);
+  } catch {
+    throw new Error(`Missing required build asset: ${label} (${path})`);
+  }
+}
+
 async function copyWasm() {
   const ortPkg = join(ROOT, 'node_modules', 'onnxruntime-web', 'dist');
-  const wasmFiles = [
-    'ort-wasm-simd-threaded.wasm',
-    'ort-wasm-simd-threaded.jsep.wasm',
-    'ort-wasm-simd-threaded.asyncify.wasm',
-    'ort-wasm-simd-threaded.mjs',
-    'ort-wasm-simd-threaded.jsep.mjs',
-    'ort-wasm-simd-threaded.asyncify.mjs',
-  ];
-
   await mkdir(LIB, { recursive: true });
 
-  for (const file of wasmFiles) {
+  for (const file of REQUIRED_WASM) {
+    const src = join(ortPkg, file);
+    await mustExist(src, `onnxruntime-web ${file}`);
+    await cp(src, join(LIB, file));
+  }
+
+  for (const file of OPTIONAL_WASM) {
     const src = join(ortPkg, file);
     try {
+      await access(src);
       await cp(src, join(LIB, file));
     } catch {
-      // Some ORT builds omit optional wasm variants.
+      // Optional ORT wasm variants.
     }
   }
 
-  const transformersWasm = join(
+  const c2paWasm = join(
     ROOT,
     'node_modules',
-    '@huggingface',
-    'transformers',
+    '@contentauth',
+    'c2pa-web',
     'dist',
-    'ort-wasm-simd-threaded.wasm'
+    'resources',
+    'c2pa_bg.wasm'
   );
-  try {
-    await cp(transformersWasm, join(LIB, 'ort-wasm-simd-threaded.wasm'));
-  } catch {
-    // fallback to onnxruntime-web copy
-  }
+  const c2paWorker = join(ROOT, 'node_modules', '@contentauth', 'c2pa-web', 'dist', 'c2pa_worker.js');
+  await mustExist(c2paWasm, 'c2pa_bg.wasm');
+  await mustExist(c2paWorker, 'c2pa_worker.js');
+  await cp(c2paWasm, join(LIB, 'c2pa_bg.wasm'));
+  await cp(c2paWorker, join(LIB, 'c2pa_worker.js'));
 }
 
 async function copyStatic() {

@@ -18,6 +18,13 @@ const emptySignals = {
   reasons: [],
 };
 
+const urlSignals = {
+  ...emptySignals,
+  urlHint: true,
+  urlHintReason: 'URL suggests Midjourney CDN',
+  reasons: ['URL suggests Midjourney CDN'],
+};
+
 describe('fuseScores', () => {
   it('C2PA forces AI verdict', () => {
     const result = fuseScores(0.1, {
@@ -48,16 +55,20 @@ describe('fuseScores', () => {
   });
 
   it('URL hint alone does not flip 0.40 to AI', () => {
-    const result = fuseScores(0.4, {
-      ...emptySignals,
-      urlHint: true,
-      urlHintReason: 'URL suggests Midjourney CDN',
-      reasons: ['URL suggests Midjourney CDN'],
-    });
+    const result = fuseScores(0.4, urlSignals);
 
     assert.equal(result.rawScore, 0.4 + URL_HINT_MAX_BOOST);
     assert.ok(result.rawScore < DEFAULT_THRESHOLD);
     assert.equal(result.verdict, 'uncertain');
     assert.equal(isAiAtThreshold(result.rawScore, DEFAULT_THRESHOLD), false);
+  });
+
+  it('URL hint does not flip 0.61 to AI at 65% threshold', () => {
+    const result = fuseScores(0.61, urlSignals);
+
+    assert.ok(result.rawScore < DEFAULT_THRESHOLD);
+    assert.equal(result.verdict, 'uncertain');
+    assert.equal(isAiAtThreshold(result.rawScore, DEFAULT_THRESHOLD), false);
+    assert.ok(result.rawScore > 0.61);
   });
 });

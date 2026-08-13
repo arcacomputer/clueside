@@ -48,15 +48,23 @@ export function fuseScores(neuralPAi, signals, threshold = DEFAULT_THRESHOLD) {
     if (signals.metadataReason) reasons.unshift(signals.metadataReason);
     forcedByMetadata = true;
   } else {
-    if (signals.urlHint) {
-      const boosted = rawScore + URL_HINT_MAX_BOOST;
-      rawScore = clamp01(boosted);
-      if (signals.urlHintReason) reasons.push(signals.urlHintReason);
+    let nonUrlScore = rawScore;
+
+    if (signals.freqResidualVote > 0 && nonUrlScore >= UNCERTAIN_LOW && nonUrlScore < threshold) {
+      nonUrlScore = clamp01(nonUrlScore + signals.freqResidualVote * 0.03);
+      reasons.push('Frequency residual weak signal');
     }
 
-    if (signals.freqResidualVote > 0 && rawScore >= UNCERTAIN_LOW && rawScore < threshold) {
-      rawScore = clamp01(rawScore + signals.freqResidualVote * 0.03);
-      reasons.push('Frequency residual weak signal');
+    rawScore = nonUrlScore;
+
+    if (signals.urlHint) {
+      const boosted = nonUrlScore + URL_HINT_MAX_BOOST;
+      if (nonUrlScore < threshold) {
+        rawScore = Math.min(boosted, threshold - 1e-6);
+      } else {
+        rawScore = clamp01(boosted);
+      }
+      if (signals.urlHintReason) reasons.push(signals.urlHintReason);
     }
   }
 
