@@ -1,4 +1,8 @@
 import { bytesToBase64 } from './bytes.js';
+import {
+  WALKTHROUGH_STORAGE_KEY,
+  shouldShowWalkthrough,
+} from './walkthrough.js';
 
 const thresholdEl = document.getElementById('threshold');
 const thresholdVal = document.getElementById('thresholdVal');
@@ -7,6 +11,8 @@ const autoScanEl = document.getElementById('autoScan');
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const resultEl = document.getElementById('result');
+const walkthroughEl = document.getElementById('walkthrough');
+const walkthroughDismissEl = document.getElementById('walkthroughDismiss');
 
 async function loadSettings() {
   const settings = await chrome.runtime.sendMessage({ type: 'get-settings' });
@@ -109,4 +115,17 @@ dropZone.addEventListener('drop', (e) => {
 });
 
 loadSettings();
+initWalkthrough();
 chrome.runtime.sendMessage({ type: 'warmup' });
+
+async function initWalkthrough() {
+  const stored = await chrome.storage.local.get({ [WALKTHROUGH_STORAGE_KEY]: false });
+  if (shouldShowWalkthrough(stored)) {
+    walkthroughEl.hidden = false;
+  }
+
+  walkthroughDismissEl.addEventListener('click', async () => {
+    walkthroughEl.hidden = true;
+    await chrome.storage.local.set({ [WALKTHROUGH_STORAGE_KEY]: true });
+  });
+}

@@ -5,6 +5,16 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 **Author:** Luis Felipe Abarca  
 **License:** MIT
 
+## How to use
+
+There is no right-click menu. After install:
+
+1. Pin the toolbar icon (Chrome puzzle menu, then the pin).
+2. Reload the page you are on.
+3. Wait for red **AI** or green **OK** badges on large images.
+
+Optional: open the popup and drop one file to check a single image. The first scan can take a few seconds while the model warms up.
+
 ## Install
 
 ### GitHub Release zip (recommended)
@@ -27,11 +37,10 @@ Load unpacked from `dist/`.
 
 Maintainers cut a release with `git tag v1.0.0 && git push origin v1.0.0`. That tag runs tests, packages the zip, and uploads it to GitHub Releases. This repo is not claimed to be on the Chrome Web Store.
 
-## Usage
+## More in the popup
 
-- Large page images (96px or wider/taller) get overlay badges after local analysis.
-- Toolbar popup: auto-scan, raw threshold (default 65%), drop a file.
-- Badges: red = AI at threshold, orange = uncertain (45-65% raw), green = below that band.
+- Auto-scan, enabled toggle, raw threshold (default 65%).
+- Uncertain badges are orange (45-65% raw).
 
 ## How scoring works
 

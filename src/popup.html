@@ -63,6 +63,39 @@
       border-top: 1px solid #e0e0e0;
     }
     .toggle { margin-bottom: 10px; }
+    .walkthrough {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid #bbdefb;
+      border-radius: 8px;
+      background: #e3f2fd;
+    }
+    .walkthrough h2 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .walkthrough ol {
+      margin: 0 0 8px;
+      padding-left: 18px;
+    }
+    .walkthrough li { margin-bottom: 4px; }
+    .walkthrough .hint {
+      margin: 0 0 8px;
+      color: #555;
+      font-size: 12px;
+    }
+    .walkthrough button {
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      background: #1565c0;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .walkthrough[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -71,6 +104,16 @@
     <p class="sub">All analysis runs on your device. Images never leave the browser.</p>
   </header>
   <main>
+    <section id="walkthrough" class="walkthrough" hidden>
+      <h2>How to use</h2>
+      <ol>
+        <li>Pin the toolbar icon (Chrome puzzle menu, then the pin).</li>
+        <li>Reload the page you are on.</li>
+        <li>Wait for red AI or green OK badges on large images.</li>
+      </ol>
+      <p class="hint">Optional: drop one image below to check a single file.</p>
+      <button type="button" id="walkthroughDismiss">Got it</button>
+    </section>
     <label class="toggle row">
       <span>Auto-scan pages</span>
       <input type="checkbox" id="autoScan" checked />
