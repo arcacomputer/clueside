@@ -1,0 +1,16 @@
+{
+  "name": "clueside-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static product website for Clueside",
+  "type": "module",
+  "author": "Luis Felipe Abarca",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node scripts/check-site.mjs",
+    "serve": "node scripts/serve-site.mjs"
+  }
+}

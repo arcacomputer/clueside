@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Clueside surfaces local AI-image signals as you browse. Eligible images are analyzed inside Chrome. No image uploads, inference API, or backend.">
+  <meta name="theme-color" content="#f4f0e7">
+  <meta property="og:title" content="Clueside | The clues stay on your side">
+  <meta property="og:description" content="Private, browser-local AI-image signals. Look twice. Upload nothing.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://clueside.com/">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://clueside.com/">
+  <title>Clueside | Local AI-image signals for your browser</title>
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Clueside home">
+      <img src="assets/mark.svg" alt="" width="32" height="32">
+      <span>clueside</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#how">How it works</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#privacy">Privacy</a>
+    </nav>
+    <a class="button button-small button-ink" href="https://github.com/felirami/hybrid-ai-image-detector/releases/latest">Get the extension</a>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="live-dot"></span> Open source · MIT · Manifest V3</p>
+        <h1>The clues stay<br>on <em>your side.</em></h1>
+        <p class="lede">Clueside surfaces likely AI-generated images while you browse. The models run inside Chrome. Your images do not go anywhere.</p>
+        <div class="hero-actions">
+          <a class="button button-signal" href="https://github.com/felirami/hybrid-ai-image-detector/releases/latest">Download latest release</a>
+          <a class="text-link" href="https://github.com/felirami/hybrid-ai-image-detector">Inspect the source <span aria-hidden="true">↗</span></a>
+          <small class="release-note">The current v1.0.8 download still appears as “Hybrid AI Image Detector.” Clueside branding is rolling into the next release.</small>
+        </div>
+        <ul class="proof-list" aria-label="Key properties">
+          <li><strong>0</strong> image uploads</li>
+          <li><strong>2</strong> local neural heads</li>
+          <li><strong>65%</strong> raw decision threshold</li>
+        </ul>
+      </div>
+
+      <div class="demo-shell" role="region" aria-labelledby="demo-title">
+        <div class="demo-topbar">
+          <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+          <p id="demo-title">Interactive scoring explainer</p>
+          <span class="local-pill">ON DEVICE</span>
+        </div>
+        <div class="demo-grid">
+          <div class="sample-panel">
+            <div class="sample-tabs" role="group" aria-label="Choose an illustrative sample">
+              <button type="button" data-sample="real" aria-pressed="false">Real</button>
+              <button type="button" data-sample="generated" aria-pressed="true">Generated</button>
+              <button type="button" data-sample="uncertain" aria-pressed="false">Uncertain</button>
+            </div>
+            <div class="scan-frame photo-ai">
+              <div class="landscape" aria-hidden="true">
+                <span class="sun"></span><span class="hill hill-a"></span><span class="hill hill-b"></span><span class="figure"></span>
+              </div>
+              <span class="scan-line" aria-hidden="true"></span>
+              <span class="image-badge is-ai" data-badge>AI 91%</span>
+            </div>
+            <p class="demo-note">Illustrative scores. This demo does not analyze or upload an image.</p>
+          </div>
+          <div class="score-panel">
+            <div class="score-readout">
+              <span>fused p(AI)</span>
+              <strong data-score>91%</strong>
+              <small data-label>likely generated</small>
+            </div>
+            <div class="signals" role="group" aria-label="Illustrative scoring signals">
+              <div class="signal-row"><span>CommunityForensics</span><i data-cf style="--value:84%"></i></div>
+              <div class="signal-row"><span>DINOv2 probe</span><i data-dino style="--value:91%"></i></div>
+              <div class="signal-row"><span>Metadata</span><b data-meta>generator trace</b></div>
+              <div class="signal-row fusion"><span>Raw fusion</span><i data-fusion style="--value:91%"></i></div>
+            </div>
+            <div class="threshold-line"><span>0</span><mark>AI threshold 65%</mark><span>100</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="marquee" aria-label="Product principles">
+      <div>NO CLOUD INFERENCE <span>◆</span> NO IMAGE API <span>◆</span> NO LOCAL SERVER <span>◆</span> WEBGPU + WASM <span>◆</span> FULLY REPRODUCIBLE</div>
+    </section>
+
+    <section class="section process" id="how">
+      <header class="section-heading">
+        <p class="kicker">01 / What happens to an image</p>
+        <h2>The browser is the lab.</h2>
+        <p>Clueside reads an image already displayed in your tab, runs complementary signals locally, then places a confidence badge beside it. The image bytes never cross an inference server because there is no inference server.</p>
+      </header>
+      <div class="pipeline" role="group" aria-label="Local analysis pipeline">
+        <article>
+          <span class="step">01</span>
+          <div class="step-icon pixels" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h3>Read</h3>
+          <p>Eligible webpage images are decoded inside the extension runtime.</p>
+        </article>
+        <span class="connector" aria-hidden="true">→</span>
+        <article>
+          <span class="step">02</span>
+          <div class="step-icon split" aria-hidden="true"><i>CF</i><i>D2</i></div>
+          <h3>Examine</h3>
+          <p>Two neural views and provenance metadata look for different kinds of evidence.</p>
+        </article>
+        <span class="connector" aria-hidden="true">→</span>
+        <article>
+          <span class="step">03</span>
+          <div class="step-icon gauge" aria-hidden="true"><i></i></div>
+          <h3>Fuse</h3>
+          <p>A conservative policy protects real photos from a noisy second opinion.</p>
+        </article>
+        <span class="connector" aria-hidden="true">→</span>
+        <article>
+          <span class="step">04</span>
+          <div class="step-icon badge-stack" aria-hidden="true"><i>AI</i><i>OK</i><i>?</i></div>
+          <h3>Mark</h3>
+          <p>Every readable image gets a raw confidence score and a plain signal.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section badge-language">
+      <div class="badge-copy">
+        <p class="kicker">02 / One glance, four honest states</p>
+        <h2>A signal, not a verdict from heaven.</h2>
+        <p>AI detection is probabilistic. Clueside shows the score, preserves uncertainty, and says when an image could not be read. No fake certainty.</p>
+      </div>
+      <div class="legend-board">
+        <div><span class="big-badge ai">AI <b>87%</b></span><p>Likely generated at or above your threshold.</p></div>
+        <div><span class="big-badge ok">OK <b>18%</b></span><p>Likely a real photo based on local signals.</p></div>
+        <div><span class="big-badge maybe">? <b>57%</b></span><p>Evidence is mixed. Treat it as uncertain.</p></div>
+        <div><span class="big-badge skip">skip</span><p>The image was too small, blocked, or unreadable.</p></div>
+      </div>
+    </section>
+
+    <section class="section evidence" id="evidence">
+      <header class="section-heading evidence-heading">
+        <p class="kicker">03 / Public evidence</p>
+        <h2>Measured in the open.<br>Qualified in public.</h2>
+        <p>The shipped policy was tested on a public, reproducible 893-image benchmark. These numbers are not a claim about POIDH's private evaluation set.</p>
+      </header>
+      <div class="metric-ledger">
+        <div class="metric-main">
+          <span class="metric-label">Balanced accuracy</span>
+          <strong>96.1<span>%</span></strong>
+          <p>at the raw 0.65 threshold</p>
+        </div>
+        <dl>
+          <div><dt>Clean images</dt><dd>96.1%</dd><dd class="metric-detail">TPR 96.1 · TNR 96.1</dd></div>
+          <div><dt>Web-stress</dt><dd>96.1%</dd><dd class="metric-detail">TPR 95.6 · TNR 96.7</dd></div>
+          <div><dt>Public samples</dt><dd>893</dd><dd class="metric-detail">409 AI · 484 real</dd></div>
+        </dl>
+      </div>
+      <div class="source-strip">
+        <span>AI sources</span><p>DALL-E 3 · Flux 1.1 · GPT-4o · Midjourney · Stable Diffusion-era</p>
+        <span>Real sources</span><p>COCO · Flickr30k · ImageNet-style · CelebA · Food101</p>
+      </div>
+      <a class="text-link" href="https://github.com/felirami/hybrid-ai-image-detector#local-benchmark">Read the benchmark method <span aria-hidden="true">↗</span></a>
+    </section>
+
+    <section class="section privacy" id="privacy">
+      <div class="privacy-boundary">
+        <span class="boundary-label">YOUR BROWSER</span>
+        <div class="boundary-core">
+          <img src="assets/mark.svg" alt="" width="56" height="56">
+          <div><strong>Image pixels</strong><small>decoded locally</small></div>
+          <span>+</span>
+          <div><strong>Model weights</strong><small>bundled locally</small></div>
+          <span>=</span>
+          <div><strong>Confidence</strong><small>shown locally</small></div>
+        </div>
+        <div class="blocked-route" role="img" aria-label="No image data leaves the browser"><span></span><b>NO IMAGE DATA</b><i>✕</i></div>
+      </div>
+      <div class="privacy-copy">
+        <p class="kicker">04 / Privacy by architecture</p>
+        <h2>We cannot keep your images because we never receive them.</h2>
+        <p>Inference runs in a Manifest V3 offscreen document using WebGPU when available and WebAssembly everywhere else. There is no account, API key, cloud model, or localhost helper.</p>
+        <ul>
+          <li>Models bundled in the release</li>
+          <li>Works after the network is disconnected</li>
+          <li>Source and build steps are public</li>
+        </ul>
+        <a class="text-link" href="https://github.com/felirami/hybrid-ai-image-detector/blob/main/PRIVACY.md">Read the privacy policy <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+
+    <section class="section install" id="install">
+      <div>
+        <p class="kicker">05 / Install from source or release</p>
+        <h2>Three minutes.<br>No account.</h2>
+      </div>
+      <ol>
+        <li><span>1</span><div><strong>Download and extract</strong><p>Get the latest release zip from GitHub.</p></div></li>
+        <li><span>2</span><div><strong>Open Chrome extensions</strong><p>Visit <code>chrome://extensions</code> and enable Developer mode.</p></div></li>
+        <li><span>3</span><div><strong>Load unpacked</strong><p>Select the extracted folder, pin Clueside, and reload your tab.</p></div></li>
+      </ol>
+      <div class="install-actions">
+        <a class="button button-signal" href="https://github.com/felirami/hybrid-ai-image-detector/releases/latest">Download release</a>
+        <a class="button button-outline" href="https://github.com/felirami/hybrid-ai-image-detector#install">Build it yourself</a>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <p class="kicker">Open infrastructure for a synthetic web</p>
+      <h2>Look twice.<br>Upload nothing.</h2>
+      <p>Clueside is an independent open-source project by Luis Felipe Abarca, built for POIDH bounty 323.</p>
+      <div>
+        <a class="button button-ink" href="https://github.com/felirami/hybrid-ai-image-detector">View on GitHub</a>
+        <a class="text-link" href="https://poidh.xyz/arbitrum/bounty/323">See the challenge <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand" href="#top"><img src="assets/mark.svg" alt="" width="28" height="28"><span>clueside</span></a>
+    <p>Images never leave your device.</p>
+    <div><a href="https://github.com/felirami/hybrid-ai-image-detector">Extension source</a><a href="https://github.com/arcacomputer/clueside">Site source</a><a href="https://github.com/felirami/hybrid-ai-image-detector/blob/main/LICENSE">MIT License</a><span>© <span data-year></span> Luis Felipe Abarca</span></div>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
