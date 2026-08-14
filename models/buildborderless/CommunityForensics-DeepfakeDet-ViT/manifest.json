@@ -1,7 +1,24 @@
 {
   "id": "buildborderless/CommunityForensics-DeepfakeDet-ViT",
+  "revision": "ac6ee457bea904a373065754107451793b56db00",
   "dtype": "fp32",
   "onnx": "onnx/model.onnx",
   "inputSize": 384,
-  "fetchedAt": "2026-08-13T19:05:06.643Z"
+  "files": [
+    {
+      "path": "onnx/model.onnx",
+      "bytes": 87442080,
+      "sha256": "a42c7d740fbb345ba9a26d469b22f301d73089ce3c6da993877ed2b6965a8ba1"
+    },
+    {
+      "path": "preprocessor_config.json",
+      "bytes": 306,
+      "sha256": "d5e70eaba99880a52978157cf4e6ee71502fed9479dd7b659854107e131ee8f6"
+    },
+    {
+      "path": "config.json",
+      "bytes": 524,
+      "sha256": "4b425d089842fecf8f25fc52aa44d09f49607ef89a0e2ff685ced6ec1c70e9b1"
+    }
+  ]
 }

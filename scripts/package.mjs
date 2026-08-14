@@ -70,7 +70,9 @@ function shouldSkip(relPosix) {
 }
 
 async function walkFiles(dir, acc = []) {
-  const entries = await readdir(dir, { withFileTypes: true });
+  const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
   for (const ent of entries) {
     const full = join(dir, ent.name);
     if (ent.isDirectory()) {

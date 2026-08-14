@@ -1,4 +1,5 @@
 import { bytesToBase64 } from './bytes.js';
+import { MAX_IMAGE_BYTES } from './image-limits.js';
 import {
   WALKTHROUGH_STORAGE_KEY,
   shouldShowWalkthrough,
@@ -49,9 +50,11 @@ autoScanEl.addEventListener('change', () => {
   saveSettings({ autoScan: autoScanEl.checked });
 });
 
-function formatResult(result) {
+function renderResult(result) {
+  resultEl.replaceChildren();
   if (!result || result.error) {
-    return `Error: ${result?.error || 'Unknown error'}`;
+    resultEl.textContent = `Error: ${result?.error || 'Unknown error'}`;
+    return;
   }
 
   const pct = Math.round((result.rawScore || 0) * 100);
@@ -63,38 +66,42 @@ function formatResult(result) {
         ? 'verdict-uncertain'
         : 'verdict-real';
 
-  const lines = [
-    `<span class="${verdictClass}">Verdict: ${result.verdict.toUpperCase()} (${pct}% raw p(AI))</span>`,
-    `Neural p(AI): ${neural}%`,
-  ];
+  const verdict = document.createElement('span');
+  verdict.className = verdictClass;
+  verdict.textContent = `Verdict: ${result.verdict.toUpperCase()} (${pct}% raw p(AI))`;
+  resultEl.append(verdict, `\nNeural p(AI): ${neural}%`);
 
   if (result.generatorHint) {
-    lines.push(`Possible generator hint: ${result.generatorHint} (not proof)`);
+    resultEl.append(`\nPossible generator hint: ${result.generatorHint} (not proof)`);
   }
   if (result.reasons?.length) {
-    lines.push('', 'Signals:', ...result.reasons.map((r) => `- ${r}`));
+    resultEl.append('\n\nSignals:');
+    for (const reason of result.reasons) resultEl.append(`\n- ${reason}`);
   }
-
-  return lines.join('\n');
 }
 
 async function analyzeFile(file) {
   resultEl.textContent = 'Analyzing...';
-  const buffer = await file.arrayBuffer();
-  const pct = Number(thresholdEl.value) / 100;
+  try {
+    if (file.size > MAX_IMAGE_BYTES) throw new Error('Image exceeds 12 MiB size cap');
+    if (file.type && !file.type.startsWith('image/')) throw new Error('Please choose an image file');
 
-  const result = await chrome.runtime.sendMessage({
-    type: 'analyze-buffer',
-    requestId: `popup-${Date.now()}`,
-    url: file.name,
-    bufferB64: bytesToBase64(buffer),
-    width: 256,
-    height: 256,
-    source: 'popup',
-    threshold: pct,
-  });
-
-  resultEl.innerHTML = formatResult(result);
+    const buffer = await file.arrayBuffer();
+    const pct = Number(thresholdEl.value) / 100;
+    const result = await chrome.runtime.sendMessage({
+      type: 'analyze-buffer',
+      requestId: `popup-${Date.now()}`,
+      url: file.name,
+      bufferB64: bytesToBase64(buffer),
+      width: 256,
+      height: 256,
+      source: 'popup',
+      threshold: pct,
+    });
+    renderResult(result);
+  } catch (err) {
+    renderResult({ error: err?.message || String(err) });
+  }
 }
 
 dropZone.addEventListener('click', () => fileInput.click());
@@ -115,7 +122,7 @@ dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('drag');
   const file = e.dataTransfer?.files?.[0];
-  if (file && file.type.startsWith('image/')) analyzeFile(file);
+  if (file) analyzeFile(file);
 });
 
 function renderUpdateBanner(status) {

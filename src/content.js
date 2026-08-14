@@ -11,12 +11,18 @@ import {
 import { createAnalyzeQueue } from './analyze-queue.js';
 import { pickImageUrl } from './image-url.js';
 import { readElementPixels, shouldTryElementPixels } from './element-pixels.js';
+import { isAnalyzeJobCurrent, unseenBackgroundUrls } from './image-job.js';
+import { MAX_IMAGE_BYTES, readResponseBytes } from './image-limits.js';
 
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
 const badgeByEl = new Map();
 const inFlight = new WeakSet();
 const waitingForLoad = new WeakSet();
+const watchedImageLoads = new WeakSet();
+const seenUrl = new WeakMap();
+const seenBackgroundState = new WeakMap();
+const deferredRescan = new WeakSet();
 let enabled = true;
 let autoScan = true;
 let scanGeneration = 0;
@@ -142,6 +148,11 @@ function scheduleReposition() {
   });
 }
 
+function clearAllBadges() {
+  for (const badge of badgeByEl.values()) badge.remove();
+  badgeByEl.clear();
+}
+
 function shortError(message) {
   if (!message) return 'Error';
   const cleaned = String(message).replace(/\s+/g, ' ').trim();
@@ -201,20 +212,37 @@ function renderBadge(el, result) {
   badge.title = lines.join('\n');
 }
 
-function markFinal(el) {
+function markFinal(el, url, source) {
+  if (source === 'background') {
+    let state = seenBackgroundState.get(el);
+    if (!state || state.generation !== scanGeneration) {
+      state = { generation: scanGeneration, urls: new Set() };
+      seenBackgroundState.set(el, state);
+    }
+    state.urls.add(url);
+    return;
+  }
+
   seenGeneration.set(el, scanGeneration);
+  seenUrl.set(el, url);
 }
 
-function finalizeResult(el, result) {
+function forgetResult(el) {
+  seenGeneration.delete(el);
+  seenUrl.delete(el);
+  seenBackgroundState.delete(el);
+}
+
+function finalizeResult(el, result, url, source) {
   if (result?.error && isFetchSkipError(result.error)) {
     renderBadge(el, toSkipResult(result.error));
-    markFinal(el);
+    markFinal(el, url, source);
     return;
   }
 
   renderBadge(el, result);
   if (!result?.error || !isTransientAnalyzeError(result.error)) {
-    markFinal(el);
+    markFinal(el, url, source);
   }
 }
 
@@ -248,7 +276,7 @@ async function fetchBlobOrData(url) {
     if (!res.ok) {
       throw new Error(`Image fetch failed (${res.status})`);
     }
-    return res.arrayBuffer();
+    return readResponseBytes(res, MAX_IMAGE_BYTES);
   } catch (err) {
     if (err?.name === 'AbortError') {
       throw new Error('Image fetch timed out');
@@ -260,6 +288,9 @@ async function fetchBlobOrData(url) {
 }
 
 async function sendBuffer(el, url, source, ttaMode, buffer) {
+  if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    return { skipped: true, reason: 'Image exceeds size cap' };
+  }
   const { width, height } = elementSize(el);
   const bufferB64 = bytesToBase64(buffer);
 
@@ -319,7 +350,28 @@ async function analyzeElementPixels(el, url, source, ttaMode) {
   }
 }
 
-async function runAnalyzeJob({ el, url, source }, { ttaMode }) {
+function isCurrentAnalyzeJob(job) {
+  const { el, source } = job;
+  return isAnalyzeJobCurrent(job, {
+    enabled,
+    autoScan,
+    connected: document.contains(el),
+    generation: scanGeneration,
+    currentUrl: source === 'img' ? pickImageUrl(el) : '',
+    backgroundUrls: source === 'background' ? collectBackgroundUrls(el) : [],
+  });
+}
+
+function rescanJobTarget({ el, source }) {
+  if (!enabled || !autoScan || !document.contains(el)) return;
+  if (source === 'img') scanImg(el);
+  else scanBackground(el);
+}
+
+async function runAnalyzeJob(job, { ttaMode }) {
+  const { el, url, source } = job;
+  if (!isCurrentAnalyzeJob(job)) return { stale: true };
+
   let result;
 
   if (url.startsWith('blob:') || url.startsWith('data:')) {
@@ -337,7 +389,10 @@ async function runAnalyzeJob({ el, url, source }, { ttaMode }) {
     if (rescued) result = rescued;
   }
 
-  finalizeResult(el, result);
+  if (!isCurrentAnalyzeJob(job)) return { stale: true };
+
+  finalizeResult(el, result, url, source);
+  return { stale: false };
 }
 
 const analyzeQueue = createAnalyzeQueue({
@@ -346,20 +401,51 @@ const analyzeQueue = createAnalyzeQueue({
 
 function queueImage(el, url, source) {
   if (!enabled || !autoScan || !url) return;
-  if (inFlight.has(el)) return;
-  if (seenGeneration.get(el) === scanGeneration) return;
+  if (!document.contains(el)) return;
+  if (inFlight.has(el)) {
+    deferredRescan.add(el);
+    return;
+  }
+  if (
+    source === 'img' &&
+    seenGeneration.get(el) === scanGeneration &&
+    seenUrl.get(el) === url
+  ) return;
+  if (source === 'background') {
+    const state = seenBackgroundState.get(el);
+    if (state?.generation === scanGeneration && state.urls.has(url)) return;
+  }
   if (!isVisible(el)) return;
 
+  const job = { el, url, source, generation: scanGeneration };
+  let stale = false;
   inFlight.add(el);
   ensureBadge(el);
 
   analyzeQueue
-    .enqueue({ el, url, source })
+    .enqueue(job)
+    .then((outcome) => {
+      stale = outcome?.stale === true;
+    })
     .catch((err) => {
-      finalizeResult(el, { error: err?.message || String(err) });
+      if (isCurrentAnalyzeJob(job)) {
+        finalizeResult(el, { error: err?.message || String(err) }, url, source);
+      } else {
+        stale = true;
+      }
     })
     .finally(() => {
       inFlight.delete(el);
+      const rescanWasDeferred = deferredRescan.delete(el);
+      if (rescanWasDeferred) {
+        // A mutation or competing source may have arrived while this element
+        // was busy. Recheck both source types because the deferred request is
+        // element-scoped, not tied to the job that happened to run first.
+        scanImg(el);
+        scanBackground(el);
+      } else if (stale) {
+        rescanJobTarget(job);
+      }
     });
 }
 
@@ -391,7 +477,9 @@ function scanImg(el) {
 function scanBackground(el) {
   if (!enabled || !autoScan) return;
   if (el.classList?.contains('haid-badge') || el.classList?.contains('haid-wrap')) return;
-  for (const url of collectBackgroundUrls(el)) {
+  const state = seenBackgroundState.get(el);
+  const seen = state?.generation === scanGeneration ? state.urls : [];
+  for (const url of unseenBackgroundUrls(collectBackgroundUrls(el), seen)) {
     queueImage(el, url, 'background');
   }
 }
@@ -404,11 +492,15 @@ function scanNode(node) {
 
   if (node instanceof Element) {
     if (node.querySelectorAll) {
-      node.querySelectorAll('img').forEach(scanImg);
+      node.querySelectorAll('img').forEach((img) => {
+        watch(img);
+        scanImg(img);
+      });
     }
     scanBackground(node);
     if (node !== document.body) {
       for (const child of node.querySelectorAll('*')) {
+        watch(child);
         scanBackground(child);
       }
     }
@@ -430,6 +522,18 @@ const observer = new IntersectionObserver(
 function watch(el) {
   if (!(el instanceof Element)) return;
   if (el.classList?.contains('haid-badge')) return;
+
+  if (el instanceof HTMLImageElement && !watchedImageLoads.has(el)) {
+    watchedImageLoads.add(el);
+    el.addEventListener('load', () => {
+      const currentUrl = pickImageUrl(el);
+      if (!currentUrl || seenUrl.get(el) === currentUrl) return;
+      forgetResult(el);
+      scanImg(el);
+      scheduleReposition();
+    });
+  }
+
   observer.observe(el);
 }
 
@@ -451,8 +555,17 @@ const mutationObserver = new MutationObserver((mutations) => {
     }
 
     if (mutation.type === 'attributes' && mutation.target instanceof HTMLImageElement) {
-      seenGeneration.delete(mutation.target);
+      forgetResult(mutation.target);
       scanImg(mutation.target);
+    } else if (mutation.type === 'attributes' && mutation.target instanceof HTMLSourceElement) {
+      const img = mutation.target.closest('picture')?.querySelector('img');
+      if (img) {
+        forgetResult(img);
+        scanImg(img);
+      }
+    } else if (mutation.type === 'attributes' && mutation.target instanceof Element) {
+      forgetResult(mutation.target);
+      scanBackground(mutation.target);
     }
   }
   scheduleReposition();
@@ -477,7 +590,7 @@ function attachObservers() {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['src', 'srcset', 'style', 'class'],
+    attributeFilter: ['src', 'srcset', 'sizes', 'media', 'style', 'class'],
   });
 
   window.addEventListener('scroll', scheduleReposition, { capture: true, passive: true });
@@ -510,10 +623,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.enabled) enabled = changes.enabled.newValue !== false;
   if (changes.autoScan) autoScan = changes.autoScan.newValue !== false;
 
+  if (!enabled || !autoScan) {
+    scanGeneration += 1;
+    clearAllBadges();
+    return;
+  }
+
   if ((!wasEnabled && enabled) || (!wasAutoScan && autoScan)) {
-    if (enabled && autoScan) {
-      chrome.runtime.sendMessage({ type: 'warmup' }).then(() => rescanAll());
-    }
+    chrome.runtime.sendMessage({ type: 'warmup' }).then(() => rescanAll());
+    return;
+  }
+
+  if (changes.threshold) {
+    rescanAll();
   }
 });
 
