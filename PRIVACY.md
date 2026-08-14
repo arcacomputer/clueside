@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Hybrid AI Image Detector**  
+**Clueside**
 Author: Luis Felipe Abarca  
 Last updated: August 2026
 

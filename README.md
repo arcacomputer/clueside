@@ -1,6 +1,8 @@
-# Hybrid AI Image Detector
+# Clueside
 
-Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Images never leave your device; the extension never downloads models or inference assets at runtime. The only network call the installed extension makes is an optional once-a-day GitHub version check for the update banner, which sends no image data and fails silently offline.
+**The clues stay on your side.** Clueside is a local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Eligible page-image URLs may be fetched for local decoding, but image bytes are never sent to Clueside or an inference backend. The extension never downloads models or inference assets at runtime. Its only outbound request unrelated to page images is an optional once-a-day GitHub version check for the update banner, which sends no image data and fails silently offline.
+
+The product website lives in [`site/`](site/) and deploys independently from the extension. Preview it with `npm run site:serve` and validate it with `npm run site:check`.
 
 **Author:** Luis Felipe Abarca  
 **License:** Original project code is MIT. Bundled model and runtime licenses
@@ -20,7 +22,7 @@ are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### GitHub Release zip (recommended)
 
-1. Download the zip from [Releases](https://github.com/felirami/hybrid-ai-image-detector/releases/latest).
+1. Download the zip from [Releases](https://github.com/arcacomputer/clueside/releases/latest).
 2. Extract it.
 3. Open `chrome://extensions` (same on Mac, Windows, and Linux), enable **Developer mode**, click **Load unpacked**, and select the extracted folder. `manifest.json` is at the root of that folder.
 4. Optional: in the extension's Details page, enable **Allow access to file URLs** if you want badges on `file://` pages (local image galleries). Images there are scored from the rendered pixels; no network is involved either way.
@@ -39,7 +41,7 @@ npm run build
 
 Load unpacked from `dist/`.
 
-**Updates (Load unpacked):** Chrome cannot auto-apply updates to unpacked extensions. The popup shows a banner when a newer [GitHub Release](https://github.com/felirami/hybrid-ai-image-detector/releases) is available. Download the latest zip, extract it, and reload the folder in `chrome://extensions`. The background worker checks once per day; opening the popup also refreshes the check. Offline or failed checks are ignored and do not affect inference.
+**Updates (Load unpacked):** Chrome cannot auto-apply updates to unpacked extensions. The popup shows a banner when a newer [GitHub Release](https://github.com/arcacomputer/clueside/releases) is available. Download the latest zip, extract it, and reload the folder in `chrome://extensions`. The background worker checks once per day; opening the popup also refreshes the check. Offline or failed checks are ignored and do not affect inference.
 
 Maintainers cut a release with `git tag v1.0.0 && git push origin v1.0.0`. That tag runs tests, packages the zip, and uploads it to GitHub Releases. This repo is not claimed to be on the Chrome Web Store.
 

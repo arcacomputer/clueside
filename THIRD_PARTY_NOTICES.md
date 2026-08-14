@@ -1,6 +1,6 @@
 # Third-party notices
 
-Hybrid AI Image Detector's original source code and DINO probe parameters are
+Clueside's original source code and DINO probe parameters are
 licensed under the repository's MIT License. The packaged extension also
 contains the following third-party components and model weights under their
 own licenses:

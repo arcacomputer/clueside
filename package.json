@@ -1,7 +1,7 @@
 {
-  "name": "hybrid-ai-image-detector",
+  "name": "clueside",
   "version": "1.0.9",
-  "description": "Local MV3 Chrome extension for AI-generated image detection",
+  "description": "Clueside: private, browser-local AI-image signals",
   "type": "module",
   "author": "Luis Felipe Abarca",
   "license": "MIT",
@@ -14,7 +14,9 @@
     "build": "node scripts/generate-icons.mjs && node scripts/build.mjs",
     "test": "node --test tests/fuse.test.mjs tests/scoring.test.mjs tests/inference-policy.test.mjs tests/graphic-gate.test.mjs tests/eval-policy.test.mjs tests/calibration.test.mjs tests/heuristics.test.mjs tests/clip-preprocess.test.mjs tests/community-forensics.test.mjs tests/bytes.test.mjs tests/image-limits.test.mjs tests/analyze-retry.test.mjs tests/analyze-queue.test.mjs tests/store-listing.test.mjs tests/release-workflow.test.mjs tests/model-fetch.test.mjs tests/image-url.test.mjs tests/image-job.test.mjs tests/messages.test.mjs tests/overlay.test.mjs tests/update-checker.test.mjs tests/element-pixels.test.mjs tests/dino.test.mjs tests/walkthrough.test.mjs",
     "eval": "node eval/harness.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "site:check": "node scripts/check-site.mjs",
+    "site:serve": "node scripts/serve-site.mjs"
   },
   "dependencies": {
     "@contentauth/c2pa-web": "^0.13.4",

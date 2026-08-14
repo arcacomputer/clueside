@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Clueside mark</title>
+  <desc id="desc">A browser-side frame surrounding a split pixel signal</desc>
+  <rect width="64" height="64" rx="14" fill="#151714"/>
+  <path d="M17 25v-8h8M39 17h8v8M47 39v8h-8M25 47h-8v-8" fill="none" stroke="#F4F0E7" stroke-width="4" stroke-linecap="square"/>
+  <rect x="25" y="25" width="14" height="14" fill="#FF5A36"/>
+  <path d="M25 32h14" stroke="#F4F0E7" stroke-width="2"/>
+</svg>

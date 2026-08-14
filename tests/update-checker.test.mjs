@@ -36,28 +36,42 @@ describe('isNewerVersion', () => {
 });
 
 describe('pickDownloadUrl', () => {
-  it('prefers the release zip asset', () => {
+  it('prefers the Clueside release zip asset', () => {
     const url = pickDownloadUrl({
-      html_url: 'https://github.com/felirami/hybrid-ai-image-detector/releases/tag/v1.0.3',
+      html_url: 'https://github.com/arcacomputer/clueside/releases/tag/v1.0.3',
       assets: [
         {
-          name: 'hybrid-ai-image-detector-1.0.3.zip',
+          name: 'clueside-1.0.3.zip',
           browser_download_url:
-            'https://github.com/felirami/hybrid-ai-image-detector/releases/download/v1.0.3/hybrid-ai-image-detector-1.0.3.zip',
+            'https://github.com/arcacomputer/clueside/releases/download/v1.0.3/clueside-1.0.3.zip',
         },
       ],
     });
-    assert.match(url, /hybrid-ai-image-detector-1\.0\.3\.zip$/);
+    assert.match(url, /clueside-1\.0\.3\.zip$/);
+  });
+
+  it('keeps migrated release assets downloadable', () => {
+    const url = pickDownloadUrl({
+      html_url: 'https://github.com/arcacomputer/clueside/releases/tag/v1.0.8',
+      assets: [
+        {
+          name: 'hybrid-ai-image-detector-1.0.8.zip',
+          browser_download_url:
+            'https://github.com/arcacomputer/clueside/releases/download/v1.0.8/hybrid-ai-image-detector-1.0.8.zip',
+        },
+      ],
+    });
+    assert.match(url, /hybrid-ai-image-detector-1\.0\.8\.zip$/);
   });
 
   it('falls back to the release page when the zip asset is missing', () => {
     const url = pickDownloadUrl({
-      html_url: 'https://github.com/felirami/hybrid-ai-image-detector/releases/tag/v1.0.3',
+      html_url: 'https://github.com/arcacomputer/clueside/releases/tag/v1.0.3',
       assets: [],
     });
     assert.equal(
       url,
-      'https://github.com/felirami/hybrid-ai-image-detector/releases/tag/v1.0.3'
+      'https://github.com/arcacomputer/clueside/releases/tag/v1.0.3'
     );
   });
 
@@ -88,12 +102,12 @@ describe('parseLatestRelease', () => {
   it('returns version and download URL from a GitHub payload', () => {
     const parsed = parseLatestRelease({
       tag_name: 'v1.0.3',
-      html_url: 'https://github.com/felirami/hybrid-ai-image-detector/releases/tag/v1.0.3',
+      html_url: 'https://github.com/arcacomputer/clueside/releases/tag/v1.0.3',
       assets: [
         {
           name: 'hybrid-ai-image-detector-1.0.3.zip',
           browser_download_url:
-            'https://github.com/felirami/hybrid-ai-image-detector/releases/download/v1.0.3/hybrid-ai-image-detector-1.0.3.zip',
+            'https://github.com/arcacomputer/clueside/releases/download/v1.0.3/hybrid-ai-image-detector-1.0.3.zip',
         },
       ],
     });
@@ -101,7 +115,7 @@ describe('parseLatestRelease', () => {
     assert.deepEqual(parsed, {
       version: '1.0.3',
       downloadUrl:
-        'https://github.com/felirami/hybrid-ai-image-detector/releases/download/v1.0.3/hybrid-ai-image-detector-1.0.3.zip',
+        'https://github.com/arcacomputer/clueside/releases/download/v1.0.3/hybrid-ai-image-detector-1.0.3.zip',
     });
   });
 });

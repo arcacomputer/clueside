@@ -224,7 +224,7 @@ async function main() {
   }
 
   const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
-  const zipName = `hybrid-ai-image-detector-${pkg.version}.zip`;
+  const zipName = `clueside-${pkg.version}.zip`;
   const zipPath = join(RELEASE, zipName);
 
   const files = await walkFiles(DIST);

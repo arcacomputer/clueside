@@ -92,7 +92,7 @@ describe('release zip layout', () => {
     assert.match(pkg, /toPosix\(relative\(DIST, abs\)\)/);
     assert.match(pkg, /localeCompare/);
     assert.match(pkg, /temporary model download/);
-    assert.doesNotMatch(pkg, /join\(['"]hybrid-ai-image-detector['"]/);
+    assert.doesNotMatch(pkg, /join\(['"]clueside['"]/);
   });
 });
 

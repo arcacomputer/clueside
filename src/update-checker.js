@@ -1,8 +1,8 @@
-export const GITHUB_OWNER = 'felirami';
-export const GITHUB_REPO = 'hybrid-ai-image-detector';
+export const GITHUB_OWNER = 'arcacomputer';
+export const GITHUB_REPO = 'clueside';
 export const GITHUB_LATEST_RELEASE_URL =
   `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-export const RELEASE_ZIP_PREFIX = 'hybrid-ai-image-detector-';
+export const RELEASE_ZIP_PREFIXES = ['clueside-', 'hybrid-ai-image-detector-'];
 const RELEASE_PATH_PREFIX = `/${GITHUB_OWNER}/${GITHUB_REPO}/releases/`;
 
 const VERSION_PARTS = /^\d+(?:\.\d+){0,2}$/;
@@ -55,7 +55,7 @@ export function pickDownloadUrl(release) {
   const zipAsset = assets.find(
     (asset) =>
       typeof asset?.name === 'string' &&
-      asset.name.startsWith(RELEASE_ZIP_PREFIX) &&
+      RELEASE_ZIP_PREFIXES.some((prefix) => asset.name.startsWith(prefix)) &&
       asset.name.endsWith('.zip') &&
       typeof asset.browser_download_url === 'string'
   );

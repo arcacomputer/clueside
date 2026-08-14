@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Read this file first.** Strict operating rules for anyone working on [felirami/hybrid-ai-image-detector](https://github.com/felirami/hybrid-ai-image-detector). Public voice: Luis Felipe Abarca. License: MIT.
+**Read this file first.** Strict operating rules for anyone working on [arcacomputer/clueside](https://github.com/arcacomputer/clueside). Public voice: Luis Felipe Abarca. License: MIT.
 
 Official bounty text and field notes: [docs/POIDH-323.md](docs/POIDH-323.md).
 

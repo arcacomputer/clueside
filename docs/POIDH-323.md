@@ -1,6 +1,6 @@
 # POIDH Arbitrum bounty 323
 
-**Public repo:** [felirami/hybrid-ai-image-detector](https://github.com/felirami/hybrid-ai-image-detector)  
+**Public repo:** [arcacomputer/clueside](https://github.com/arcacomputer/clueside)
 **Author:** Luis Felipe Abarca  
 **License:** MIT
 

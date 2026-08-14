@@ -14,7 +14,7 @@ describe('Chrome Web Store listing copy', () => {
 
     assert.equal(manifest.version, pkg.version);
     assert.match(store, new RegExp(`\\*\\*Version:\\*\\* ${pkg.version.replaceAll('.', '\\.')}`));
-    assert.match(store, new RegExp(`hybrid-ai-image-detector-${pkg.version.replaceAll('.', '\\.')}`));
+    assert.match(store, new RegExp(`clueside-${pkg.version.replaceAll('.', '\\.')}`));
   });
 
   it('keeps the short description at or under 132 characters', async () => {

@@ -31,43 +31,48 @@ function createPng(size) {
   const width = size;
   const height = size;
   const raw = Buffer.alloc((width * 4 + 1) * height);
-  const cx = width / 2;
-  const cy = height / 2;
-  const r = size * 0.38;
+  const edge = size * 0.08;
+  const radius = size * 0.2;
+  const stroke = Math.max(1, Math.round(size * 0.055));
+  const frameMin = size * 0.26;
+  const frameMax = size * 0.74;
+  const arm = size * 0.15;
+  const centerMin = size * 0.39;
+  const centerMax = size * 0.61;
+
+  function insideRoundedSquare(x, y) {
+    const left = edge;
+    const right = size - edge;
+    const top = edge;
+    const bottom = size - edge;
+    const cx = Math.max(left + radius, Math.min(x, right - radius));
+    const cy = Math.max(top + radius, Math.min(y, bottom - radius));
+    return (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2;
+  }
+
+  function inViewfinder(x, y) {
+    const horizontal =
+      (Math.abs(y - frameMin) <= stroke || Math.abs(y - frameMax) <= stroke) &&
+      ((x >= frameMin && x <= frameMin + arm) || (x <= frameMax && x >= frameMax - arm));
+    const vertical =
+      (Math.abs(x - frameMin) <= stroke || Math.abs(x - frameMax) <= stroke) &&
+      ((y >= frameMin && y <= frameMin + arm) || (y <= frameMax && y >= frameMax - arm));
+    return horizontal || vertical;
+  }
 
   for (let y = 0; y < height; y++) {
     const row = y * (width * 4 + 1) + 1;
     for (let x = 0; x < width; x++) {
-      const dx = x - cx + 0.5;
-      const dy = y - cy + 0.5;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const px = x + 0.5;
+      const py = y + 0.5;
       const i = row + x * 4;
-      if (dist <= r * 0.42) {
-        raw[i] = 255;
-        raw[i + 1] = 255;
-        raw[i + 2] = 255;
-        raw[i + 3] = 255;
-      } else if (dist <= r * 0.55) {
-        raw[i] = 21;
-        raw[i + 1] = 101;
-        raw[i + 2] = 192;
-        raw[i + 3] = 255;
-      } else if (dist <= r) {
-        raw[i] = 21;
-        raw[i + 1] = 101;
-        raw[i + 2] = 192;
-        raw[i + 3] = 255;
-      } else if (dist <= r + 1.5) {
-        raw[i] = 13;
-        raw[i + 1] = 71;
-        raw[i + 2] = 161;
-        raw[i + 3] = 255;
-      } else {
-        raw[i] = 0;
-        raw[i + 1] = 0;
-        raw[i + 2] = 0;
-        raw[i + 3] = 0;
+      let color = [0, 0, 0, 0];
+      if (insideRoundedSquare(px, py)) color = [21, 23, 20, 255];
+      if (insideRoundedSquare(px, py) && inViewfinder(px, py)) color = [244, 240, 231, 255];
+      if (px >= centerMin && px <= centerMax && py >= centerMin && py <= centerMax) {
+        color = [255, 90, 54, 255];
       }
+      [raw[i], raw[i + 1], raw[i + 2], raw[i + 3]] = color;
     }
   }
 

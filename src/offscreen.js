@@ -318,7 +318,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-console.log('Hybrid AI Image Detector offscreen ready');
+console.log('Clueside offscreen ready');
 
 function sniffMime(bytes) {
   const buf = toArrayBuffer(bytes);

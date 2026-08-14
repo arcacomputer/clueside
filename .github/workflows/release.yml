@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - run: npm ci
@@ -34,9 +34,9 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          zip=(release/hybrid-ai-image-detector-*.zip)
+          zip=(release/clueside-*.zip)
           if [ ${#zip[@]} -eq 0 ]; then
-            echo "No zip in release/. npm run package must write hybrid-ai-image-detector-*.zip"
+            echo "No zip in release/. npm run package must write clueside-*.zip"
             exit 1
           fi
           printf '%s\n' \
