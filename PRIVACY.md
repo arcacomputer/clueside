@@ -29,8 +29,7 @@ This extension analyzes images entirely on your device. Image bytes are not uplo
 | `host_permissions` `<all_urls>` | Fetch image URLs from pages you visit so pixels can be decoded without canvas taint (CORS bypass for analysis only) |
 | `offscreen` | Run ONNX inference in a document with DOM/WebGPU |
 | `storage` | Save your threshold and toggle preferences |
-| `unlimitedStorage` | Hold the on-device ~83MB ONNX weights (package or Cache Storage). Not used to upload images. |
-| `activeTab` | Optional context for the current tab |
+| `alarms` | Schedule the optional daily GitHub release-version check |
 
 ## Data we do not collect
 

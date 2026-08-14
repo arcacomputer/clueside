@@ -47,10 +47,14 @@ describe('fuseNeuralScores policy', () => {
   });
 
   it('CF below DINO floor ignores DINO even when high', () => {
-    assert.ok(DINO_CF_FLOOR > 0.37);
-    const fused = fuseNeuralScores(0.37, 0.99);
-    assert.equal(fused, 0.37);
+    assert.equal(DINO_CF_FLOOR, 0.40);
+    const fused = fuseNeuralScores(0.399, 0.99);
+    assert.equal(fused, 0.399);
     assert.equal(isAiAtThreshold(fused), false);
+  });
+
+  it('includes the DINO floor boundary in the lift band', () => {
+    assert.equal(fuseNeuralScores(DINO_CF_FLOOR, 0.91), 0.91);
   });
 
   it('graphic gate suppresses DINO lift in the uncertain band', () => {

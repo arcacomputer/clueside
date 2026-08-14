@@ -5,7 +5,11 @@ import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
 import { analyzeGraphicGate } from './graphic-gate.js';
 import { effectiveTtaMode, fuseInferenceScores } from './inference-policy.js';
-import { MAX_IMAGE_BYTES, readResponseBytes } from './image-limits.js';
+import {
+  MAX_IMAGE_BYTES,
+  MAX_IMAGE_BASE64_CHARS,
+  readResponseBytes,
+} from './image-limits.js';
 import {
   configureOrtLogging,
   createCommunityForensicsSession,
@@ -194,6 +198,9 @@ async function fetchImageBytes(url) {
  */
 async function resolveImageBytes(message) {
   if (typeof message.bufferB64 === 'string' && message.bufferB64.length > 0) {
+    if (message.bufferB64.length > MAX_IMAGE_BASE64_CHARS) {
+      throw new Error('Image exceeds size cap');
+    }
     const bytes = base64ToBytes(message.bufferB64);
     if (bytes.byteLength > MAX_IMAGE_BYTES) {
       throw new Error('Image exceeds size cap');

@@ -1,6 +1,9 @@
 # Evaluation harness
 
-Dev-only Node scorer. Uses the same CommunityForensics ONNX model, CLIP preprocessing (`src/clip-preprocess.js`), heuristics, and fusion as the extension. This is the product path: `clip-preprocess.js` + onnxruntime-web.
+Dev-only Node scorer. It uses both shipped ONNX backbones, the DINO probe,
+CommunityForensics TTA, deterministic metadata, and the shared production
+fusion policy. Browser and Node decoding use different image APIs, but model
+inputs and score decisions come from the same source modules.
 
 ## Benchmark + probe tooling (added with the DINO head)
 
@@ -10,10 +13,13 @@ All of these are dev-only and never ship in the extension:
 - `degrade.mjs <in> <out>` — web-realistic copies (max 800px, JPEG q78) via macOS `sips`.
 - `sweep.mjs <dir> <out.jsonl>` — score every TTA view per image with onnxruntime-node (no early exit) for offline policy simulation.
 - `analyze.mjs <sweep.jsonl> [--dino=scores.jsonl]` — simulate TTA policies / thresholds / ensembles, report BA/TPR/TNR per source.
+- `analyze.mjs` also reports Brier score and 10-bin expected calibration error for the fixed production policy. These are raw-score diagnostics only; they do not remap scores or change the 0.65 decision rule.
 - `fetch-train.mjs <dir>` — probe TRAINING set, disjoint from the bench (different datasets, or row offsets ≥ 200).
 - `extract-features.mjs <dir> <dino.onnx> <prefix> [--augment]` — DINOv2 CLS+mean features; `--augment` adds JPEG/resize degradation (training only).
 - `train-probe.mjs <prefix> <probe.json>` — logistic head with a hash-split validation report.
 - `score-dino.mjs <prefix> <probe.json> <out.jsonl>` — probe scores for a feature set.
+- `dino-view-bench.mjs <dir> <out.jsonl>` tests center/corner consistency for
+  low-CF DINO rescue research; it is not a shipped score policy.
 - `parity/` — in-browser harness running the exact product path (canvas + onnxruntime-web) over the bench to validate that Node numbers transfer.
 
 ## Prerequisites
@@ -23,7 +29,17 @@ npm ci
 npm run fetch-model
 ```
 
-Weights must exist at `models/buildborderless/CommunityForensics-DeepfakeDet-ViT/onnx/model.onnx` (FP32).
+Both FP32 weights must exist:
+
+- `models/buildborderless/CommunityForensics-DeepfakeDet-ViT/onnx/model.onnx`
+- `models/Xenova/dinov2-small/onnx/model.onnx`
+
+`npm run fetch-model` verifies immutable upstream revisions, byte lengths, and
+SHA-256 hashes before accepting either model.
+
+Regenerate older sweep JSONL before labeling a report `product-current`.
+Current sweep records include `graphicGate`; `analyze.mjs` deliberately omits
+that policy label when the field is absent.
 
 ## Folder layout
 
@@ -48,22 +64,34 @@ npm run eval -- ./my-dataset --tta=always
 
 Output:
 
-1. CSV lines per image: `file,label,raw_score,neural_score,verdict,predicted_ai,extra_ran,early_exit,views,reasons`
+1. CSV lines per image: `file,label,raw_score,neural_score,cf_score,dino_score,verdict,predicted_ai,forced_by_metadata,graphic_gate,extra_ran,early_exit,views,reasons`
 2. Summary with TPR, TNR, and balanced accuracy at raw `0.65` when both `ai/` and `real/` folders are present
 
 ## Scoring details
 
-- Neural: `p(AI) = sigmoid(logit)` from CommunityForensics ViT (CLIP 384 crop, official FP32 ONNX)
+- DINO probe: a 224 center view runs first using `src/dino.js` and the shipped
+  transparent logistic head.
+- CommunityForensics: `p(AI) = sigmoid(logit)` from the CLIP 384 ViT using the
+  official FP32 ONNX.
 - Preprocess: resize shortest edge 440, 384 center + corners, plus a 512 center crop, CLIP mean/std (values from upstream `preprocessor_config.json`). Crops are taken on the resized full image, not on an already-cropped 384 square.
-- TTA (default `--tta=adaptive`): extra crops run only when the official 440 center p(AI) is in `[0.15, 0.65)`. Aggregation is `Math.max` of raw sigmoids. Inference stops if any crop is `>= 0.9`.
-- Probe modes: `--tta=center` (official center only) and `--tta=always` (max of all six views, for TNR checks)
-- Fusion: same `fuseScores()` as production (C2PA byte scan in Node; c2pa-web runs only in the extension offscreen doc)
+- TTA (default `--tta=adaptive`): DINO at `>= 0.15` expands CF scoring to all
+  views. Otherwise extra CF crops run when the official 440 center p(AI) is in
+  `[0.15, 0.65)`. Production CF takes the maximum raw sigmoid from inspected
+  views. Inference stops when any inspected crop reaches `>= 0.9`.
+- Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
+- Neural fusion: CF-primary. CF wins below `0.40` and at or above `0.65`; DINO
+  may lift only inside that band. The same native-pixel flat-graphic gate used
+  by the extension suppresses DINO lift on catalog art and UI-like images.
+- Final fusion: `src/inference-policy.js` is imported by the extension and both
+  evaluators. Node uses the deterministic C2PA byte fallback; c2pa-web runs in
+  the extension offscreen document.
 - Eval decision: binary at raw fused score >= 0.65 (no UI remapping)
 - URL hints cannot cross the threshold alone
 
 ## Preprocessing vs Hugging Face AutoProcessor
 
-The extension and harness do **not** call `AutoImageProcessor` at runtime. Both use `src/clip-preprocess.js`:
+The extension and harness do **not** call `AutoImageProcessor` at runtime. CF
+uses `src/clip-preprocess.js`; DINO uses `src/dino.js`:
 
 | Step | Extension (offscreen) | Harness (Node) | HF `AutoProcessor` |
 |------|----------------------|----------------|--------------------|
@@ -75,6 +103,10 @@ The extension and harness do **not** call `AutoImageProcessor` at runtime. Both 
 The logical pipeline matches `preprocessor_config.json`, but resize interpolation is not guaranteed to be identical to PIL bicubic. Per-image scores can differ from a standalone `transformers` notebook on the same file. **Report harness numbers** when describing this repo; do not copy scores from external AutoProcessor experiments.
 
 ## Fixture observation (n=19 public set, not a bounty claim)
+
+The records below predate the DINO head and are retained as historical
+CommunityForensics diagnostics. They are not expected output from the current
+two-model `npm run eval` command.
 
 The n=19 maintainer gallery is not in git (Unsplash/Pexels reals are local). Re-run locally with `npm run eval -- /path/to/fixture` (adaptive is the default). Prior center-only harness numbers at raw 0.65:
 

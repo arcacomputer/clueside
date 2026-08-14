@@ -228,6 +228,7 @@ async function main() {
   } catch {
     console.error(`done: ${count} new, ${totalRows} total rows`);
   }
+  await session.release();
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]));

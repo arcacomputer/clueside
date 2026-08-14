@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeGraphicPixels } from '../src/graphic-gate.js';
+import {
+  analyzeGraphicPackedPixels,
+  analyzeGraphicPixels,
+} from '../src/graphic-gate.js';
 
 function rgbaBuffer(width, height, fillFn) {
   const rgba = new Uint8Array(width * height * 4);
@@ -51,5 +54,19 @@ describe('analyzeGraphicPixels', () => {
     });
     const stats = analyzeGraphicPixels(rgba, 80, 80);
     assert.equal(stats.isGraphic, true);
+  });
+});
+
+describe('analyzeGraphicPackedPixels', () => {
+  it('applies the same gate to packed RGB used by the Node evaluator', () => {
+    const rgb = new Uint8Array(32 * 32 * 3).fill(40);
+    const stats = analyzeGraphicPackedPixels(rgb, 32, 32);
+    assert.equal(stats.isGraphic, true);
+    assert.ok(stats.flatFrac > 0.99);
+  });
+
+  it('fails open for malformed packed pixels', () => {
+    assert.equal(analyzeGraphicPackedPixels(new Uint8Array(3), 10, 10, 3).isGraphic, false);
+    assert.equal(analyzeGraphicPackedPixels(new Uint8Array(100), 10, 10, 1).isGraphic, false);
   });
 });

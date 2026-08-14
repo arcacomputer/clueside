@@ -5,6 +5,7 @@ import {
   dinoPoolFeatures,
   dinoProbeScore,
   dinoPackedRgbToCHW,
+  dinoPreprocessRawImage,
   DINO_CROP_SIZE,
 } from '../src/dino.js';
 import { fuseNeuralScores } from '../src/fuse.js';
@@ -64,6 +65,37 @@ describe('dinoPackedRgbToCHW', () => {
     // (1 - 0.485) / 0.229
     assert.ok(Math.abs(chw[0] - (1 - 0.485) / 0.229) < 1e-6);
     assert.ok(Math.abs(chw[plane] - (1 - 0.456) / 0.224) < 1e-6);
+  });
+});
+
+describe('dinoPreprocessRawImage', () => {
+  it('uses the shared 256-short-edge center crop', async () => {
+    const plane = DINO_CROP_SIZE * DINO_CROP_SIZE;
+    let resizeArgs = null;
+    let cropArgs = null;
+    const rawImage = {
+      width: 1024,
+      height: 768,
+      async resize(width, height) {
+        resizeArgs = [width, height];
+        return {
+          async crop(box) {
+            cropArgs = box;
+            return {
+              width: DINO_CROP_SIZE,
+              height: DINO_CROP_SIZE,
+              channels: 3,
+              data: new Uint8Array(plane * 3),
+            };
+          },
+        };
+      },
+    };
+
+    const chw = await dinoPreprocessRawImage(rawImage);
+    assert.deepEqual(resizeArgs, [341, 256]);
+    assert.deepEqual(cropArgs, [58, 16, 281, 239]);
+    assert.equal(chw.length, 3 * plane);
   });
 });
 

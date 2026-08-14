@@ -45,12 +45,12 @@ async function exists(path) {
   }
 }
 
-function run(command, args, extraEnv = {}) {
+function run(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: ROOT,
       stdio: 'inherit',
-      env: { ...process.env, ...extraEnv },
+      env: process.env,
     });
     child.on('error', reject);
     child.on('exit', (code) => {
@@ -103,17 +103,12 @@ function u32(n) {
 async function writeZip(files, zipPath) {
   await mkdir(dirname(zipPath), { recursive: true });
   const out = createWriteStream(zipPath);
-  const streamError = new Promise((_, reject) => out.once('error', reject));
   const central = [];
   let offset = 0;
 
-    const write = (buf) =>
+  const write = (buf) =>
     new Promise((resolve, reject) => {
-      if (!out.write(buf)) {
-        out.once('drain', resolve);
-      } else {
-        resolve();
-      }
+      out.write(buf, (error) => (error ? reject(error) : resolve()));
     });
 
   for (const abs of files) {
@@ -189,7 +184,8 @@ async function writeZip(files, zipPath) {
   );
 
   await new Promise((resolve, reject) => {
-    out.end((err) => (err ? reject(err) : resolve()));
+    out.once('error', reject);
+    out.end(resolve);
   });
 }
 
@@ -198,7 +194,8 @@ async function main() {
   await run(process.execPath, [join(ROOT, 'scripts/fetch-model.mjs')]);
 
   console.log('Building dist/...');
-  await run('npm', ['run', 'build'], { REQUIRE_MODEL: '1' });
+  await run(process.execPath, [join(ROOT, 'scripts/generate-icons.mjs')]);
+  await run(process.execPath, [join(ROOT, 'scripts/build.mjs')]);
 
   if (!(await exists(ONNX))) {
     throw new Error(
@@ -231,6 +228,12 @@ async function main() {
   const zipPath = join(RELEASE, zipName);
 
   const files = await walkFiles(DIST);
+  const temporaryDownloads = files.filter((abs) =>
+    toPosix(relative(DIST, abs)).includes('.download-')
+  );
+  if (temporaryDownloads.length) {
+    throw new Error('dist/ contains a temporary model download; rebuild from clean assets.');
+  }
   const extras = files.filter((abs) => toPosix(relative(DIST, abs)).includes('onnx-community'));
   if (extras.length) {
     throw new Error(

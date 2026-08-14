@@ -11,6 +11,13 @@
 
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { DEFAULT_THRESHOLD, fuseScores } from '../src/fuse.js';
+import {
+  heuristicSignalsForSweep,
+  productFloorScore,
+  productRawScore,
+} from './product-policy.mjs';
+import { calibrationMetrics } from './calibration.mjs';
 
 const args = process.argv.slice(2);
 const files = args.filter((a) => !a.startsWith('--'));
@@ -128,6 +135,14 @@ const ENSEMBLE_POLICIES = {
     if (cf < 0.40) return cf;
     return Math.max(cf, d);
   },
+  'product-current': (rec) => productRawScore(rec, dinoFor(rec)),
+  'product-floor-0.40': (rec) => productFloorScore(rec, dinoFor(rec), 0.40),
+  'product-floor-0.30': (rec) => productFloorScore(rec, dinoFor(rec), 0.30),
+  'product-floor-0.20': (rec) => productFloorScore(rec, dinoFor(rec), 0.20),
+  'product-floor-0.15': (rec) => productFloorScore(rec, dinoFor(rec), 0.15),
+  'product-floor-0.10': (rec) => productFloorScore(rec, dinoFor(rec), 0.10),
+  'product-floor-0.05': (rec) => productFloorScore(rec, dinoFor(rec), 0.05),
+  'product-floor-0.00': (rec) => productFloorScore(rec, dinoFor(rec), 0),
 };
 
 function adaptiveScore(rec, lo, _agg) {
@@ -143,8 +158,7 @@ function adaptiveScoreAgg(rec, lo, agg) {
 }
 
 function fused(neural, rec) {
-  if (rec.heur?.c2pa || rec.heur?.meta) return 0.97;
-  return neural;
+  return fuseScores(neural, heuristicSignalsForSweep(rec), DEFAULT_THRESHOLD).rawScore;
 }
 
 function metrics(records, scoreFn, threshold, withFusion) {
@@ -206,20 +220,27 @@ function report(name, records) {
   const ai = records.filter((r) => r.label === 'ai');
   const real = records.filter((r) => r.label === 'real');
   const errors = records.filter((r) => r.error);
+  const successfulRecords = records.filter((record) => !record.error);
+  const hasGraphicGate =
+    successfulRecords.length > 0 &&
+    successfulRecords.every((record) => typeof record.graphicGate === 'boolean');
   console.log(`\n=== ${name}: ${ai.length} ai / ${real.length} real (${errors.length} errors) ===`);
 
   const metaAi = ai.filter((r) => r.heur?.c2pa || r.heur?.meta).length;
   const metaReal = real.filter((r) => r.heur?.c2pa || r.heur?.meta).length;
   console.log(`metadata-forced: ${metaAi} ai, ${metaReal} real (real ones are false forces!)`);
 
+  const ensemblePolicies = { ...ENSEMBLE_POLICIES };
+  if (!hasGraphicGate) delete ensemblePolicies['product-current'];
   const activePolicies = dinoByFile.size
-    ? { ...POLICIES, ...ENSEMBLE_POLICIES }
+    ? { ...POLICIES, ...ensemblePolicies }
     : POLICIES;
 
   console.log(`\npolicy                 @${THRESHOLD}  BA    TPR    TNR   | best-t  BA`);
   for (const [pname, fn] of Object.entries(activePolicies)) {
-    const at = metrics(records, fn, THRESHOLD, true);
-    const best = bestThreshold(records, fn, true);
+    const needsFinalFusion = pname !== 'product-current';
+    const at = metrics(records, fn, THRESHOLD, needsFinalFusion);
+    const best = bestThreshold(records, fn, needsFinalFusion);
     console.log(
       `${pname.padEnd(22)} ${pct(at.ba)} ${pct(at.tpr)} ${pct(at.tnr)}  | t=${best.t.toFixed(2)} ${pct(best.ba)}`
     );
@@ -228,9 +249,31 @@ function report(name, records) {
   const centerNoFuse = metrics(records, POLICIES.center, THRESHOLD, false);
   console.log(`center w/o fusion      ${pct(centerNoFuse.ba)} ${pct(centerNoFuse.tpr)} ${pct(centerNoFuse.tnr)}`);
 
+  if (dinoByFile.size && hasGraphicGate) {
+    const calibration = calibrationMetrics(
+      records,
+      ENSEMBLE_POLICIES['product-current']
+    );
+    if (calibration.n) {
+      console.log(
+        `product-current raw calibration: Brier ${calibration.brier.toFixed(4)}, ECE-10 ${calibration.ece.toFixed(4)} (n=${calibration.n})`
+      );
+    }
+  } else if (dinoByFile.size) {
+    console.log('product-current omitted: regenerate sweep JSONL to include graphicGate');
+  }
+
   // Per-source recall at the operating threshold for a few key policies.
   const perSourceList = dinoByFile.size
-    ? ['center', 'always-max', 'dino-only', 'ens-max', 'ens-max-center', 'ens-smart']
+    ? [
+        'center',
+        'always-max',
+        'dino-only',
+        'ens-max',
+        'ens-smart',
+        ...(hasGraphicGate ? ['product-current'] : []),
+        'product-floor-0.40',
+      ]
     : ['center', 'adaptive[0.15]', 'adaptive[0]', 'always-max', 'always-top2'];
   for (const pname of perSourceList) {
     const fn = activePolicies[pname];
@@ -241,7 +284,7 @@ function report(name, records) {
       if (!yields.has(key)) yields.set(key, { hit: 0, n: 0 });
       const y = yields.get(key);
       y.n++;
-      const score = fused(fn(rec), rec);
+      const score = pname === 'product-current' ? fn(rec) : fused(fn(rec), rec);
       const predAi = score >= THRESHOLD;
       if ((rec.label === 'ai') === predAi) y.hit++;
     }

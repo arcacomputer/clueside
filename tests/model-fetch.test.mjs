@@ -59,4 +59,22 @@ describe('pinned model fetch inputs', () => {
       if (await exists(path)) assert.equal(await sha256(path), file.sha256);
     }
   });
+  it('uses integrity checks and atomic temporary downloads', async () => {
+    const source = await readFile(join(ROOT, 'scripts/fetch-model.mjs'), 'utf8');
+    assert.match(source, /createHash\('sha256'\)/);
+    assert.match(source, /downloadVerified/);
+    assert.match(source, /await rename\(temp, dest\)/);
+    assert.match(source, /removeDownloadArtifacts/);
+    assert.doesNotMatch(source, /resolve\/main/);
+    assert.doesNotMatch(source, /fetchedAt/);
+  });
+
+  it('fails ordinary builds when bundled model assets are missing', async () => {
+    const source = await readFile(join(ROOT, 'scripts/build.mjs'), 'utf8');
+    assert.match(source, /ALLOW_MISSING_MODELS/);
+    assert.match(source, /if \(!ALLOW_MISSING_MODELS\) throw err/);
+    assert.doesNotMatch(source, /REQUIRE_MODEL/);
+    assert.match(source, /for \(const file of model\.files\)/);
+    assert.doesNotMatch(source, /cp\(srcModels, destModels, \{ recursive: true \}\)/);
+  });
 });
