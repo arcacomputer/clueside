@@ -46,19 +46,6 @@ export function aggregateViewScores(scores) {
 }
 
 /**
- * Production TTA aggregation. Average the official center prediction with the
- * strongest inspected view so one anomalous corner cannot become the entire
- * CF score. This is an average of raw sigmoid probabilities, not a remap.
- * @param {number[]} scores center score first, followed by inspected extras
- * @returns {number}
- */
-export function aggregateProductionViewScores(scores) {
-  if (!scores?.length) return 0.5;
-  const center = clamp01(scores[0]);
-  return (center + aggregateViewScores(scores)) / 2;
-}
-
-/**
  * Extra 440-corner / 512-center crops only help when the official center
  * crop is uncertain. A confident real (for example 0.04) will not become
  * 0.65 by taking the max of six similar scores.
@@ -104,25 +91,17 @@ export function foldTtaScores(scores, options = {}) {
     return { neuralPAi: center, extraRan: false, earlyExit: false, used };
   }
 
+  let max = center;
   for (let i = 1; i < scores.length; i++) {
     const v = clamp01(scores[i]);
     used.push(v);
+    if (v > max) max = v;
     if (v >= earlyExit) {
-      return {
-        neuralPAi: aggregateProductionViewScores(used),
-        extraRan: true,
-        earlyExit: true,
-        used,
-      };
+      return { neuralPAi: max, extraRan: true, earlyExit: true, used };
     }
   }
 
-  return {
-    neuralPAi: aggregateProductionViewScores(used),
-    extraRan: true,
-    earlyExit: false,
-    used,
-  };
+  return { neuralPAi: max, extraRan: true, earlyExit: false, used };
 }
 
 function clamp01(v) {

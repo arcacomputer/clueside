@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { effectiveTtaMode, fuseInferenceScores } from '../src/inference-policy.js';
+import { fuseNeuralScores, DEFAULT_THRESHOLD } from '../src/fuse.js';
 
 const noSignals = {
   c2paAi: false,
@@ -32,5 +33,25 @@ describe('production inference policy', () => {
     });
     assert.equal(forced.rawScore, 0.97);
     assert.equal(forced.forcedByMetadata, true);
+  });
+
+  it('suppresses DINO lift on flat graphics when CF stays below threshold', () => {
+    assert.equal(
+      fuseNeuralScores(0.45, 0.99, { graphicGate: true }),
+      0.45
+    );
+    assert.equal(fuseInferenceScores(0.45, 0.99, noSignals, DEFAULT_THRESHOLD, {
+      graphicGate: true,
+    }).rawScore, 0.45);
+  });
+
+  it('does not suppress CF-confident AI illustrations on flat graphics', () => {
+    assert.equal(fuseNeuralScores(0.72, 0.12, { graphicGate: true }), 0.72);
+    assert.equal(
+      fuseInferenceScores(0.72, 0.12, noSignals, DEFAULT_THRESHOLD, {
+        graphicGate: true,
+      }).verdict,
+      'ai'
+    );
   });
 });

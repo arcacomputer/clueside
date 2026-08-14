@@ -107,7 +107,7 @@ describe('fuseNeuralScores', () => {
 
   it('does not let saturated DINO override a near-zero CF', () => {
     assert.equal(fuseNeuralScores(0.02, 0.99), 0.02);
-    assert.equal(fuseNeuralScores(0.149, 1), 0.149);
+    assert.equal(fuseNeuralScores(0.37, 1), 0.37);
   });
 
   it('lets DINO lift uncertain CF scores', () => {

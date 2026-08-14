@@ -74,6 +74,8 @@ describe('analyze clocks are split', () => {
     assert.match(offscreen, /ttaMode/);
     assert.match(offscreen, /Image fetch timed out/);
     assert.match(offscreen, /Inference timed out/);
+    assert.match(offscreen, /analyzeGraphicGate/);
+    assert.match(offscreen, /fuseInferenceScores/);
     assert.equal(offscreen.includes('\u2014'), false);
   });
 
@@ -89,6 +91,7 @@ describe('release zip layout', () => {
     const pkg = await readFile(join(ROOT, 'scripts/package.mjs'), 'utf8');
     assert.match(pkg, /toPosix\(relative\(DIST, abs\)\)/);
     assert.match(pkg, /localeCompare/);
+    assert.match(pkg, /temporary model download/);
     assert.doesNotMatch(pkg, /join\(['"]hybrid-ai-image-detector['"]/);
   });
 });

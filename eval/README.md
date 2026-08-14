@@ -37,6 +37,10 @@ Both FP32 weights must exist:
 `npm run fetch-model` verifies immutable upstream revisions, byte lengths, and
 SHA-256 hashes before accepting either model.
 
+Regenerate older sweep JSONL before labeling a report `product-current`.
+Current sweep records include `graphicGate`; `analyze.mjs` deliberately omits
+that policy label when the field is absent.
+
 ## Folder layout
 
 ```
@@ -60,7 +64,7 @@ npm run eval -- ./my-dataset --tta=always
 
 Output:
 
-1. CSV lines per image: `file,label,raw_score,neural_score,cf_score,dino_score,verdict,predicted_ai,forced_by_metadata,extra_ran,early_exit,views,reasons`
+1. CSV lines per image: `file,label,raw_score,neural_score,cf_score,dino_score,verdict,predicted_ai,forced_by_metadata,graphic_gate,extra_ran,early_exit,views,reasons`
 2. Summary with TPR, TNR, and balanced accuracy at raw `0.65` when both `ai/` and `real/` folders are present
 
 ## Scoring details
@@ -72,11 +76,12 @@ Output:
 - Preprocess: resize shortest edge 440, 384 center + corners, plus a 512 center crop, CLIP mean/std (values from upstream `preprocessor_config.json`). Crops are taken on the resized full image, not on an already-cropped 384 square.
 - TTA (default `--tta=adaptive`): DINO at `>= 0.15` expands CF scoring to all
   views. Otherwise extra CF crops run when the official 440 center p(AI) is in
-  `[0.15, 0.65)`. Production CF averages the center sigmoid with the strongest
-  inspected view. Inference stops when any inspected crop reaches `>= 0.9`.
+  `[0.15, 0.65)`. Production CF takes the maximum raw sigmoid from inspected
+  views. Inference stops when any inspected crop reaches `>= 0.9`.
 - Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
-- Neural fusion: CF-primary. CF wins below `0.15` and at or above `0.65`; DINO
-  may lift only inside that band.
+- Neural fusion: CF-primary. CF wins below `0.40` and at or above `0.65`; DINO
+  may lift only inside that band. The same native-pixel flat-graphic gate used
+  by the extension suppresses DINO lift on catalog art and UI-like images.
 - Final fusion: `src/inference-policy.js` is imported by the extension and both
   evaluators. Node uses the deterministic C2PA byte fallback; c2pa-web runs in
   the extension offscreen document.

@@ -24,6 +24,7 @@ import { RawImage } from '@huggingface/transformers';
 import ort from 'onnxruntime-node';
 import { fileURLToPath } from 'node:url';
 import { analyzeHeuristics } from '../src/heuristics.js';
+import { analyzeGraphicPackedPixels } from '../src/graphic-gate.js';
 import { preprocessRawImageViews } from '../src/clip-preprocess.js';
 import { CROP_SIZE, MODEL_ID, MODEL_ONNX_PATH, ONNX_INPUT_NAME, ONNX_OUTPUT_NAME } from '../src/models.js';
 import { sigmoid } from '../src/scoring.js';
@@ -114,6 +115,12 @@ async function main() {
       const buffer = await readFile(path);
       const heuristics = await analyzeHeuristics(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), path);
       const rawImage = await RawImage.read(path);
+      const graphicGate = analyzeGraphicPackedPixels(
+        rawImage.data,
+        rawImage.width,
+        rawImage.height,
+        rawImage.channels
+      ).isGraphic;
       const views = await preprocessRawImageViews(rawImage);
 
       const scores = {};
@@ -129,12 +136,17 @@ async function main() {
         source: sourceOf(path),
         width: rawImage.width,
         height: rawImage.height,
+        graphicGate,
         views: scores,
         heur: {
           c2pa: heuristics.c2paAi,
+          c2paReason: heuristics.c2paReason,
           meta: heuristics.metadataAi,
+          metadataReason: heuristics.metadataReason,
           url: heuristics.urlHint,
+          urlHintReason: heuristics.urlHintReason,
           freq: heuristics.freqResidualVote,
+          reasons: heuristics.reasons,
         },
       };
       await appendFile(out, JSON.stringify(record) + '\n');

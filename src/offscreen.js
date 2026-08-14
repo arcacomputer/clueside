@@ -1,9 +1,10 @@
 import * as ort from 'onnxruntime-web';
 import { analyzeHeuristics } from './heuristics.js';
 import { DEFAULT_THRESHOLD } from './fuse.js';
-import { effectiveTtaMode, fuseInferenceScores } from './inference-policy.js';
 import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
+import { analyzeGraphicGate } from './graphic-gate.js';
+import { effectiveTtaMode, fuseInferenceScores } from './inference-policy.js';
 import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_BASE64_CHARS,
@@ -223,8 +224,7 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   const mode = normalizeTtaMode(ttaMode);
   const activeThreshold = customThreshold ?? threshold;
 
-  let cfPAi = 0.5;
-  let dinoPAi = null;
+  let fused;
   let modelError = null;
 
   try {
@@ -233,12 +233,10 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
     try {
-      // DINO head first: one cheap 224 pass that carries the modern
-      // generators CF under-scores. Fusion is CF-primary, so a saturated
-      // DINO cannot override a near-zero CF; CF TTA still runs when DINO
-      // is mildly suspicious to rescue photoreal misses.
-      dinoPAi = await dinoScore(bitmap);
+      const graphicGate = analyzeGraphicGate(bitmap).isGraphic;
+      const dinoPAi = await dinoScore(bitmap);
 
+      let cfPAi;
       if (mode === 'center') {
         const chw = await preprocessBitmap(bitmap);
         cfPAi = await predictCHW(activeSession, chw);
@@ -247,20 +245,24 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
         const effectiveMode = effectiveTtaMode(mode, dinoPAi);
         cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
       }
+
+      fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold, {
+        graphicGate,
+      });
+      if (graphicGate && cfPAi < DEFAULT_THRESHOLD) {
+        fused.reasons.push('Flat graphic gate: DINO lift suppressed');
+      }
     } finally {
       bitmap.close();
     }
   } catch (err) {
     modelError = err.message || String(err);
     if (heuristics.c2paAi || heuristics.metadataAi) {
-      cfPAi = 0.5;
-      dinoPAi = null;
+      fused = fuseInferenceScores(0.5, null, heuristics, activeThreshold);
     } else {
       throw err;
     }
   }
-
-  const fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold);
 
   return {
     ...fused,

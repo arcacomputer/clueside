@@ -1,9 +1,6 @@
-import { DEFAULT_THRESHOLD } from '../src/fuse.js';
-import {
-  aggregateProductionViewScores,
-  TTA_ADAPTIVE_LOW,
-  TTA_EARLY_EXIT,
-} from '../src/scoring.js';
+import { DEFAULT_THRESHOLD, fuseNeuralScores } from '../src/fuse.js';
+import { effectiveTtaMode, fuseInferenceScores } from '../src/inference-policy.js';
+import { foldTtaScores } from '../src/scoring.js';
 
 export const PRODUCT_VIEW_ORDER = ['center', 'tl', 'tr', 'bl', 'br', 'center_512'];
 
@@ -15,22 +12,43 @@ export const PRODUCT_VIEW_ORDER = ['center', 'tl', 'tr', 'bl', 'br', 'center_512
  * @param {number|null|undefined} dino
  */
 export function productCfScore(rec, dino) {
-  const center = rec.views.center;
-  if (center >= TTA_EARLY_EXIT) return center;
+  const scores = PRODUCT_VIEW_ORDER
+    .map((name) => rec.views[name])
+    .filter((score) => score != null);
+  const mode = effectiveTtaMode('adaptive', dino ?? null);
+  return foldTtaScores(scores, { mode }).neuralPAi;
+}
 
-  const runExtra =
-    (dino != null && dino >= TTA_ADAPTIVE_LOW) ||
-    (center >= TTA_ADAPTIVE_LOW && center < DEFAULT_THRESHOLD);
-  if (!runExtra) return center;
+/** Mirror the current production neural policy through shared source modules. */
+export function productNeuralScore(rec, dino) {
+  return fuseNeuralScores(productCfScore(rec, dino), dino ?? null, {
+    graphicGate: rec.graphicGate === true,
+  });
+}
 
-  const inspected = [center];
-  for (const name of PRODUCT_VIEW_ORDER.slice(1)) {
-    const score = rec.views[name];
-    if (score == null) continue;
-    inspected.push(score);
-    if (score >= TTA_EARLY_EXIT) break;
-  }
-  return aggregateProductionViewScores(inspected);
+/** Convert compact sweep metadata back into the shared fusion shape. */
+export function heuristicSignalsForSweep(rec) {
+  return {
+    c2paAi: rec.heur?.c2pa === true,
+    c2paReason: rec.heur?.c2paReason ?? null,
+    metadataAi: rec.heur?.meta === true,
+    metadataReason: rec.heur?.metadataReason ?? null,
+    urlHint: rec.heur?.url === true,
+    urlHintReason: rec.heur?.urlHintReason ?? null,
+    freqResidualVote: Number(rec.heur?.freq) || 0,
+    reasons: Array.isArray(rec.heur?.reasons) ? rec.heur.reasons : [],
+  };
+}
+
+/** Mirror the complete current raw score, including deterministic metadata. */
+export function productRawScore(rec, dino) {
+  return fuseInferenceScores(
+    productCfScore(rec, dino),
+    dino ?? null,
+    heuristicSignalsForSweep(rec),
+    DEFAULT_THRESHOLD,
+    { graphicGate: rec.graphicGate === true }
+  ).rawScore;
 }
 
 /**
@@ -43,5 +61,6 @@ export function productCfScore(rec, dino) {
 export function productFloorScore(rec, dino, floor) {
   const cf = productCfScore(rec, dino);
   if (dino == null || cf >= DEFAULT_THRESHOLD || cf < floor) return cf;
+  if (rec.graphicGate === true) return cf;
   return Math.max(cf, dino);
 }

@@ -5,7 +5,6 @@ import {
   neuralPAiFromLogit,
   logitAtProbability,
   aggregateViewScores,
-  aggregateProductionViewScores,
   shouldRunExtraCrops,
   foldTtaScores,
   TTA_ADAPTIVE_LOW,
@@ -36,17 +35,6 @@ describe('aggregateViewScores', () => {
   });
 });
 
-describe('aggregateProductionViewScores', () => {
-  it('averages the official center with the strongest inspected view', () => {
-    assert.ok(Math.abs(aggregateProductionViewScores([0.2, 0.41, 0.72]) - 0.46) < 1e-12);
-  });
-
-  it('does not change a single center score', () => {
-    assert.equal(aggregateProductionViewScores([0.2]), 0.2);
-    assert.equal(aggregateProductionViewScores([]), 0.5);
-  });
-});
-
 describe('adaptive TTA fusion', () => {
   it('skips extras when center is a confident real (0.04)', () => {
     assert.equal(shouldRunExtraCrops(0.04), false);
@@ -59,7 +47,7 @@ describe('adaptive TTA fusion', () => {
   it('runs extras in the uncertain band including crying-robot ~0.20', () => {
     assert.equal(shouldRunExtraCrops(0.2), true);
     const folded = foldTtaScores([0.2, 0.41, 0.72], { mode: 'adaptive' });
-    assert.ok(Math.abs(folded.neuralPAi - 0.46) < 1e-12);
+    assert.equal(folded.neuralPAi, 0.72);
     assert.equal(folded.extraRan, true);
   });
 
@@ -69,10 +57,10 @@ describe('adaptive TTA fusion', () => {
     assert.equal(shouldRunExtraCrops(0.149), false);
   });
 
-  it('always mode can inspect a 0.04 center; adaptive must not', () => {
+  it('always-max can lift a 0.04 center; adaptive must not', () => {
     const always = foldTtaScores([0.04, 0.7], { mode: 'always' });
     const adaptive = foldTtaScores([0.04, 0.7], { mode: 'adaptive' });
-    assert.equal(always.neuralPAi, 0.37);
+    assert.equal(always.neuralPAi, 0.7);
     assert.equal(adaptive.neuralPAi, 0.04);
   });
 
@@ -82,16 +70,16 @@ describe('adaptive TTA fusion', () => {
     assert.equal(folded.extraRan, false);
   });
 
-  it('early-exits at 0.9 and aggregates only inspected scores', () => {
+  it('early-exits at 0.9 without stretching remaining scores', () => {
     const folded = foldTtaScores([0.4, TTA_EARLY_EXIT, 0.99], { mode: 'adaptive' });
-    assert.equal(folded.neuralPAi, 0.65);
+    assert.equal(folded.neuralPAi, TTA_EARLY_EXIT);
     assert.equal(folded.earlyExit, true);
     assert.deepEqual(folded.used, [0.4, TTA_EARLY_EXIT]);
   });
 
   it('does not remap 0.20 to 0.65', () => {
     const folded = foldTtaScores([0.2, 0.22, 0.18], { mode: 'adaptive' });
-    assert.ok(Math.abs(folded.neuralPAi - 0.21) < 1e-12);
+    assert.equal(folded.neuralPAi, 0.22);
     assert.ok(folded.neuralPAi < DEFAULT_THRESHOLD);
   });
 

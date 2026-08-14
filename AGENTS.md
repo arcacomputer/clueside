@@ -20,7 +20,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Hardcoded image hashes, per-image lookup tables, or eval circumvention.**
 - **Score remapping / Platt / logit shift** that paints a raw 0.02 as displayed 65%. Competitors (Proofmark, anudit, RealGuard, Rajesh, PixelWitness) do this. **We do not.** `DEFAULT_THRESHOLD` stays **0.65** on the raw fused p(AI).
 - **Wrapping or replacing `<img>` / `<picture>`** (IKEA product grids collapse). Badges stay on `document.body`, `position:fixed`.
-- **Apache-2.0 (or other non-MIT) model weights in the shipped zip** if we can avoid them. Submission license is MIT. Second heads must be MIT-clean.
+- **Undocumented or non-redistributable third-party assets.** Original project code stays MIT. Bundled model/runtime licenses must be compatible with redistribution and included in `THIRD_PARTY_NOTICES.md` and the release zip.
 - **Chrome Web Store publish** or paying the $5 developer fee unless the repo owner explicitly asks.
 - **On-chain POIDH claim, wallet connect, gas spend, or "we won" public claim** without the repo owner's explicit OK.
 - **Invented metrics, fake screenshots, or citing any public benchmark as Kenny's private score.** It is not.
@@ -32,7 +32,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Manifest V3.** `onnxruntime-web` in an offscreen document. WebGPU with WASM fallback (probe the adapter; do not latch a WebGPU error).
 - **Auto-scan ordinary webpages.** Confidence on every badge: AI / OK / uncertain.
 - **Hybrid is allowed:** neural + C2PA + EXIF/XMP + PNG/JPEG comments + weak URL hints. A URL hint alone must not cross 0.65.
-- **Current candidate fusion (v1.0.8): CF-primary.** CommunityForensics TTA averages the official center with its strongest inspected view. CF is authoritative when CF >= 0.65 or CF < 0.15. DINO may only lift when CF is in [0.15, 0.65). **Do not restore raw max(CF, DINO).** It painted many Unsplash/IKEA real photos AI.
+- **Current fusion (v1.0.9): CF-primary.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative when CF >= 0.65 or CF < 0.40. DINO may only lift when CF is in [0.40, 0.65), and the flat-graphic gate suppresses that lift on catalog art and UI-like images. **Do not restore raw max(CF, DINO), lower the 0.40 floor, or remove the graphic gate without fresh public and live-site evidence.**
 - **Overlay:** badge store must be an iterable `Map`, not a `WeakMap`. Reposition on scroll / resize / `visualViewport` / mutations. Never wrap images.
 - **Load-unpacked users do not auto-update.** GitHub Releases zip + popup banner is the update path. Do not assume CWS.
 - **Cross-device:** macOS (owner), Windows, Linux. WASM must work when WebGPU has no adapter.
@@ -65,7 +65,8 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 
 | File | Role |
 |---|---|
-| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.15, CF-primary `fuseNeuralScores` |
+| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.40, CF-primary `fuseNeuralScores` |
+| `src/graphic-gate.js` | Shared flat-graphic policy for browser and Node evaluation |
 | `src/offscreen.js` | ORT WebGPU/WASM, DINO 224 then CF TTA |
 | `src/content.js` | scan, fixed badges, `Map` badgeByEl |
 | `src/community-forensics.js` | CommunityForensics ViT head |
@@ -74,7 +75,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 | `src/c2pa-reader.js` | C2PA reader |
 
 - Issue 23 (fixed in PR 24 / v1.0.7): overlay WeakMap drift + DINO max false positives.
-- Live smoke on 2026-08-13: v1.0.8 policy held the v1.0.7 known-real false-positive count on the captured sample while improving the public fixture. Seven of 31 captured known-real images still false-positive, so this remains a claim blocker pending broader live validation.
+- Live smoke on 2026-08-13 found seven false positives among 31 captured known-real images. That remains a claim blocker pending broader live validation. The current 0.40 floor + graphic-gate policy has not been rerun on the exact 893-image fixture, so older experimental metrics must not be labeled as its score.
 
 ---
 

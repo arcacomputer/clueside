@@ -6,7 +6,7 @@
  * anything at runtime.
  */
 
-import { mkdir, writeFile, access, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, writeFile, access, readdir, rename, rm, stat } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { createHash } from 'node:crypto';
@@ -37,6 +37,26 @@ async function fileMatches(path, file) {
   const info = await stat(path);
   if (info.size !== file.bytes) return false;
   return (await sha256File(path)) === file.sha256;
+}
+
+async function removeDownloadArtifacts(dir) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await removeDownloadArtifacts(path);
+    } else if (entry.isFile() && entry.name.includes('.download-')) {
+      await rm(path, { force: true });
+      console.log(`Removed stale download: ${path.slice(ROOT.length + 1)}`);
+    }
+  }
 }
 
 async function downloadVerified(url, dest, file) {
@@ -76,6 +96,7 @@ async function main() {
   for (const model of MODEL_SPECS) {
     const modelDir = join(ROOT, 'models', model.repo);
     await mkdir(modelDir, { recursive: true });
+    await removeDownloadArtifacts(modelDir);
 
     for (const file of model.files) {
       const dest = join(modelDir, file.path);

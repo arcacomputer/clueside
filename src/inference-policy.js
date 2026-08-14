@@ -18,12 +18,18 @@ export function effectiveTtaMode(requestedMode, dinoPAi) {
  * @param {number|null} dinoPAi
  * @param {import('./fuse.js').HeuristicSignals} heuristics
  * @param {number} [threshold]
+ * @param {{ graphicGate?: boolean }} [options]
  */
 export function fuseInferenceScores(
   cfPAi,
   dinoPAi,
   heuristics,
-  threshold = DEFAULT_THRESHOLD
+  threshold = DEFAULT_THRESHOLD,
+  options = {}
 ) {
-  return fuseScores(fuseNeuralScores(cfPAi, dinoPAi), heuristics, threshold);
+  return fuseScores(
+    fuseNeuralScores(cfPAi, dinoPAi, { graphicGate: options.graphicGate }),
+    heuristics,
+    threshold
+  );
 }

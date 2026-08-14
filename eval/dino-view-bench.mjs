@@ -9,8 +9,7 @@
  */
 
 import { readFile, readdir, writeFile } from 'node:fs/promises';
-import { basename, extname, join, relative, resolve } from 'node:path';
-import { dirname } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RawImage } from '@huggingface/transformers';
 import ort from 'onnxruntime-node';

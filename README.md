@@ -29,6 +29,8 @@ The zip already includes both model weights (CommunityForensics and DINOv2-small
 
 ### From source
 
+Requires Node.js 20.9 or newer.
+
 ```bash
 npm ci
 npm run fetch-model
@@ -53,8 +55,8 @@ Two independent neural heads cover complementary failure modes, plus determinist
 
 1. **CommunityForensics head:** ViT-Small official FP32 ONNX (CLIP 384). `p(AI) = sigmoid(logit)`. Near-zero false positives on real photos, but under-scores several modern generators (Flux, GPT-4o-image, photoreal DALL-E 3).
 2. **DINOv2 probe head:** frozen DINOv2-small backbone (224 center view) with a transparent logistic head over CLS+mean-pooled features (`models/probe/dino-probe.json`: plain standardize/weights/bias, no lookup tables). Trained on ~9.6k images from public datasets across Flux, SD3.5, SDXL-era, Midjourney, DALL-E 3, GPT-4o-image and diverse real photos, with web-realistic JPEG/resize augmentation. This head carries the modern generators.
-3. **Neural fusion:** CF-primary with a `0.15` CF floor. CommunityForensics wins when its aggregated score is `>= 0.65` or `< 0.15`. Between `0.15` and `0.65`, DINO may lift with `max(cf, dino)`. A saturated DINO score still cannot override genuinely near-zero CF. Displayed confidence is the raw fused probability; the AI verdict stays at raw `>= 0.65` with no remapping and no logit bias.
-4. **Adaptive TTA:** the DINO pass and official 440 center crop always run. Extra CommunityForensics views (440 corners + 512 center) run when CF center is in `[0.15, 0.65)` or DINO is at least `0.15`. Production CF averages its center score with the strongest inspected view, which reduces one-crop outliers. Inference stops inspecting views at `>= 0.9`. Under heavy queue load (more than 12 pending) CF drops to center-only; the DINO pass still runs.
+3. **Neural fusion:** CF-primary with a `0.40` CF floor. When CommunityForensics is confident (`>= 0.65` AI or `< 0.40` real), its score wins. Between `0.40` and `0.65`, DINO can lift (`max(cf, dino)`), so saturated DINO on stock photos (~0-37% CF) cannot override a low CF. On flat graphics and catalog art (low palette / high flat-run pixels), a graphic gate suppresses DINO lift when CF stays below `0.65`, so icons and UI shots do not mass-label AI 100%. CF-confident AI illustrations (`>= 0.65`) are unchanged. Displayed confidence is this raw fused probability; the AI verdict stays at raw `>= 0.65` with no remapping and no logit bias.
+4. **Adaptive TTA:** the DINO pass and the official 440 center crop always run. Extra CommunityForensics views (440 corners + 512 center) run only when a head is at least mildly suspicious (CF center or DINO in `[0.15, 0.65)`), so confident reals cost two passes total. `Math.max` of sigmoids, early exit at `>= 0.9`. Under heavy queue load (more than 12 pending) CF drops to center-only; the DINO pass still runs.
 5. **Metadata:** C2PA, EXIF/XMP/IPTC, generator text in PNG/JPEG, weak URL hints. Strong metadata forces 0.95-0.99; a URL hint alone cannot cross 65%.
 
 ## Tests
@@ -63,7 +65,7 @@ Two independent neural heads cover complementary failure modes, plus determinist
 npm test
 ```
 
-Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. See `eval/README.md`. Public n=19 fixture numbers are not a private-benchmark claim.
+Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-model`. See `eval/README.md`. Public fixtures are not private-benchmark claims.
 
 ## Local benchmark
 
@@ -74,9 +76,9 @@ Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-mo
 | CommunityForensics adaptive max diagnostic | 71.9% | 44.0% | 99.8% |
 | DINOv2 probe only | 93.0% | 89.7% | 96.3% |
 | Legacy raw max ensemble (not shipped) | 96.1% | 96.1% | 96.1% |
-| **v1.0.8 CF-primary production policy** | **79.8%** | **59.9%** | **99.8%** |
+| PR #26 experiment: CF floor 0.15 + center/max averaging (not shipped) | 79.8% | 59.9% | 99.8% |
 
-The legacy raw max result is included to make the tradeoff visible, not as a product claim. It caused unacceptable false positives on live stock and catalog images, so production keeps the CF guard. Per-source correctness for v1.0.8: DALL-E 3 78%, Flux 1.1 42%, GPT-4o 15%, Midjourney 83%, SD/ELSA 67%; CelebA 100%, COCO 99%, Flickr 100%, Food101 100%, ImageNet-style 100%.
+The legacy raw max result is included to make the tradeoff visible, not as a product claim. It caused unacceptable false positives on live stock and catalog images, so production keeps the CF guard. The current CF floor 0.40 + flat-graphic-gate policy has not yet been rerun on this exact 893-image fixture; no older or experimental result is presented as its score.
 
 ## Limitations
 

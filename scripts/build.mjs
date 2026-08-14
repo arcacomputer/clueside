@@ -4,6 +4,7 @@ import { cp, mkdir, rm, readFile, writeFile, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
+import { MODEL_SPECS } from './model-specs.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -94,21 +95,27 @@ async function copyStatic() {
     await cp(join(ROOT, 'icons', `icon${size}.png`), join(DIST, `icons/icon${size}.png`));
   }
 
-  const modelDirs = [
-    ['buildborderless', 'CommunityForensics-DeepfakeDet-ViT'],
-    ['Xenova', 'dinov2-small'],
-  ];
-
-  for (const parts of modelDirs) {
+  for (const model of MODEL_SPECS) {
+    const parts = model.repo.split('/');
     const srcModels = join(ROOT, 'models', ...parts);
     const destModels = join(MODELS, ...parts);
     try {
-      await mustExist(join(srcModels, 'onnx', 'model.onnx'), `${parts.join('/')} onnx/model.onnx`);
-      await cp(srcModels, destModels, { recursive: true });
+      for (const file of model.files) {
+        const src = join(srcModels, file.path);
+        const dest = join(destModels, file.path);
+        await mustExist(src, `${model.repo} ${file.path}`);
+        await mkdir(dirname(dest), { recursive: true });
+        await cp(src, dest);
+      }
+      for (const file of ['manifest.json', 'LICENSE']) {
+        const src = join(srcModels, file);
+        await mustExist(src, `${model.repo} ${file}`);
+        await cp(src, join(destModels, file));
+      }
     } catch (err) {
       await mkdir(destModels, { recursive: true });
       if (!ALLOW_MISSING_MODELS) throw err;
-      console.warn(`Warning: ${parts.join('/')} weights missing in UI-only build.`);
+      console.warn(`Warning: ${model.repo} assets missing in UI-only build.`);
     }
   }
 

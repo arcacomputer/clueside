@@ -1,8 +1,8 @@
 # Chrome Web Store listing copy
 
 **Author:** Luis Felipe Abarca  
-**License:** MIT  
-**Version:** 1.0.8
+**Project license:** MIT (bundled assets have their own notices)
+**Version:** 1.0.9
 
 Unpacked install from GitHub (`npm run fetch-model && npm run build`, then Load unpacked from `dist/`) remains the POIDH proof path. This file is listing copy for a future Chrome Web Store upload. The extension is **not** claimed to be on the Chrome Web Store.
 
@@ -11,9 +11,9 @@ both FP32 ONNX backbones (~168 MiB total) so a store install works offline.
 
 ## Short description (132 characters max)
 
-On-device AI image detector for Chrome. Local ONNX inference, no cloud upload. MIT. Default 65% threshold.
+On-device AI image detector for Chrome. Local ONNX inference, no cloud upload. Open source. Default 65% threshold.
 
-Character count: 105.
+Character count: 114.
 
 ## Detailed description (paste into the Store listing)
 
@@ -22,10 +22,11 @@ Hybrid AI Image Detector estimates whether images on web pages (or files you dro
 How it works
 - Two local neural heads: CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX)
   plus a DINOv2-small feature probe (transparent logistic head). Fusion is
-  CF-primary: CommunityForensics wins below 15% and at or above 65%; DINO may
-  lift only inside that band. CommunityForensics TTA averages its center and
-  strongest inspected crop. The decision threshold is raw 65% p(AI), with no
-  score remapping.
+  CF-primary: CommunityForensics wins below 40% and at or above 65%; DINO may
+  lift only inside that band. A flat-graphic guard prevents DINO from
+  overriding CF on catalog art and UI-like images. CommunityForensics TTA uses
+  the maximum raw sigmoid from inspected crops. The decision threshold is raw
+  65% p(AI), with no score remapping.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
 - Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 
@@ -101,7 +102,7 @@ Do not screenshot private or copyrighted photos you do not have rights to. Use t
 
 1. `npm ci && npm run package`
 2. Open the Chrome Web Store Developer Dashboard (one-time developer registration is a Google process; this repo does not submit for you).
-3. New item, upload `release/hybrid-ai-image-detector-1.0.8.zip`
+3. New item, upload `release/hybrid-ai-image-detector-1.0.9.zip`
 4. Paste the short and detailed descriptions above
 5. Set privacy policy URL to the hosted `docs/privacy.html`
 6. Attach screenshots and the 128px icon

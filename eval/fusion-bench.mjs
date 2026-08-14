@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import * as ort from 'onnxruntime-web';
 import { RawImage } from '@huggingface/transformers';
 import { analyzeHeuristics } from '../src/heuristics.js';
+import { analyzeGraphicPackedPixels } from '../src/graphic-gate.js';
 import { DEFAULT_THRESHOLD, isAiAtThreshold } from '../src/fuse.js';
 import { effectiveTtaMode, fuseInferenceScores } from '../src/inference-policy.js';
 import { preprocessRawImageViews } from '../src/clip-preprocess.js';
@@ -87,6 +88,12 @@ async function scoreFile(filePath, label) {
   const bytes = await readFile(filePath);
   const heuristics = await analyzeHeuristics(bytes, filePath);
   const rawImage = await RawImage.read(filePath);
+  const graphicGate = analyzeGraphicPackedPixels(
+    rawImage.data,
+    rawImage.width,
+    rawImage.height,
+    rawImage.channels
+  ).isGraphic;
   const views = await preprocessRawImageViews(rawImage);
   const dinoChw = await dinoPreprocessRawImage(rawImage);
   const dinoInput = new ort.Tensor('float32', dinoChw, [1, 3, DINO_CROP_SIZE, DINO_CROP_SIZE]);
@@ -96,7 +103,9 @@ async function scoreFile(filePath, label) {
   const mode = effectiveTtaMode('adaptive', dinoPAi);
   const viewed = await predictAdaptiveViews(cfSession, views, { mode });
   const cfPAi = viewed.neuralPAi;
-  const fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, DEFAULT_THRESHOLD);
+  const fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, DEFAULT_THRESHOLD, {
+    graphicGate,
+  });
 
   return {
     file: filePath,
@@ -106,6 +115,7 @@ async function scoreFile(filePath, label) {
     neural: fused.neuralScore,
     fused: fused.rawScore,
     metadataForced: fused.forcedByMetadata,
+    graphicGate,
     predicted_ai: isAiAtThreshold(fused.rawScore, DEFAULT_THRESHOLD),
   };
 }
@@ -163,10 +173,10 @@ async function main() {
   );
   console.log(`Metadata-forced verdicts: ${metadataForced}/${rows.length}`);
   if (process.argv.includes('--rows')) {
-    console.log('label,cf,dino,fused,metadata_forced,file');
+    console.log('label,cf,dino,fused,metadata_forced,graphic_gate,file');
     for (const row of rows) {
       console.log(
-        `${row.label},${row.cf.toFixed(6)},${row.dino.toFixed(6)},${row.fused.toFixed(6)},${row.metadataForced},${relative(dir, row.file)}`
+        `${row.label},${row.cf.toFixed(6)},${row.dino.toFixed(6)},${row.fused.toFixed(6)},${row.metadataForced},${row.graphicGate},${relative(dir, row.file)}`
       );
     }
   }
@@ -176,6 +186,9 @@ async function main() {
     console.log('AI misses:', aiMiss.map(describe).join(', '));
     console.log('Real FPs:', realFp.map(describe).join(', '));
   }
+
+  await cfSession.release();
+  await dinoSession.release();
 }
 
 main().catch((err) => {
