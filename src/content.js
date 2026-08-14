@@ -437,7 +437,15 @@ function queueImage(el, url, source) {
     .finally(() => {
       inFlight.delete(el);
       const rescanWasDeferred = deferredRescan.delete(el);
-      if (stale || rescanWasDeferred) rescanJobTarget(job);
+      if (rescanWasDeferred) {
+        // A mutation or competing source may have arrived while this element
+        // was busy. Recheck both source types because the deferred request is
+        // element-scoped, not tied to the job that happened to run first.
+        scanImg(el);
+        scanBackground(el);
+      } else if (stale) {
+        rescanJobTarget(job);
+      }
     });
 }
 

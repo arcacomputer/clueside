@@ -53,6 +53,7 @@ describe('overlay badges do not wrap images', () => {
     const content = await readFile(join(ROOT, 'src/content.js'), 'utf8');
     assert.match(content, /deferredRescan\.add\(el\)/);
     assert.match(content, /deferredRescan\.delete\(el\)/);
+    assert.match(content, /if \(rescanWasDeferred\)[\s\S]*scanImg\(el\);[\s\S]*scanBackground\(el\);/);
     assert.match(content, /unseenBackgroundUrls/);
   });
 
