@@ -14,7 +14,7 @@ import { readElementPixels, shouldTryElementPixels } from './element-pixels.js';
 
 const MIN_SIZE = 96;
 const seenGeneration = new WeakMap();
-const badgeByEl = new WeakMap();
+const badgeByEl = new Map();
 const inFlight = new WeakSet();
 const waitingForLoad = new WeakSet();
 let enabled = true;
@@ -96,7 +96,10 @@ function ensureBadge(el) {
     placeBadge(el, badge);
     return badge;
   }
-  if (badge) badge.remove();
+  if (badge) {
+    badge.remove();
+    badgeByEl.delete(el);
+  }
 
   badge = document.createElement('div');
   badge.className = 'haid-badge haid-pending';
@@ -113,6 +116,7 @@ function ensureBadge(el) {
 function placeBadge(el, badge) {
   if (!document.contains(el)) {
     badge.remove();
+    badgeByEl.delete(el);
     return;
   }
 
@@ -130,6 +134,7 @@ function scheduleReposition() {
     for (const [el, badge] of badgeByEl.entries()) {
       if (!document.contains(el) || !document.contains(badge)) {
         badge.remove();
+        badgeByEl.delete(el);
         continue;
       }
       placeBadge(el, badge);
@@ -450,6 +455,7 @@ const mutationObserver = new MutationObserver((mutations) => {
       scanImg(mutation.target);
     }
   }
+  scheduleReposition();
 });
 
 function rescanAll() {
@@ -476,6 +482,10 @@ function attachObservers() {
 
   window.addEventListener('scroll', scheduleReposition, { capture: true, passive: true });
   window.addEventListener('resize', scheduleReposition, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('scroll', scheduleReposition, { passive: true });
+    window.visualViewport.addEventListener('resize', scheduleReposition, { passive: true });
+  }
 }
 
 async function bootstrap() {

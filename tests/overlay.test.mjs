@@ -21,7 +21,18 @@ describe('overlay badges do not wrap images', () => {
     assert.doesNotMatch(content, /ANALYZE_TIMEOUT_MS/);
     assert.doesNotMatch(content, /timeoutMessage: 'Timed out'/);
     assert.match(content, /scheduleReposition/);
+    assert.match(content, /badgeByEl = new Map\(\)/);
+    assert.doesNotMatch(content, /badgeByEl = new WeakMap\(\)/);
+    assert.match(content, /badgeByEl\.entries\(\)/);
+    assert.match(content, /visualViewport/);
     assert.equal(content.includes('\u2014'), false);
+  });
+
+  it('reposition walks live badge pairs and drops stale entries', async () => {
+    const content = await readFile(join(ROOT, 'src/content.js'), 'utf8');
+    assert.match(content, /for \(const \[el, badge\] of badgeByEl\.entries\(\)/);
+    assert.match(content, /badgeByEl\.delete\(el\)/);
+    assert.match(content, /scheduleReposition\(\);\s*\}\);/s);
   });
 
   it('does not start the fetch clock when the badge is painted', async () => {
