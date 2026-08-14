@@ -11,6 +11,8 @@
 
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { DINO_CF_FLOOR } from '../src/fuse.js';
+import { aggregateProductionViewScores, TTA_EARLY_EXIT } from '../src/scoring.js';
 
 const args = process.argv.slice(2);
 const files = args.filter((a) => !a.startsWith('--'));
@@ -128,7 +130,42 @@ const ENSEMBLE_POLICIES = {
     if (cf < 0.40) return cf;
     return Math.max(cf, d);
   },
+  'product-current': (rec) => productFloorScore(rec, DINO_CF_FLOOR),
+  'product-floor-0.40': (rec) => productFloorScore(rec, 0.40),
+  'product-floor-0.30': (rec) => productFloorScore(rec, 0.30),
+  'product-floor-0.20': (rec) => productFloorScore(rec, 0.20),
+  'product-floor-0.15': (rec) => productFloorScore(rec, 0.15),
+  'product-floor-0.10': (rec) => productFloorScore(rec, 0.10),
+  'product-floor-0.05': (rec) => productFloorScore(rec, 0.05),
+  'product-floor-0.00': (rec) => productFloorScore(rec, 0),
 };
+
+/** Mirror the extension's DINO-triggered adaptive CommunityForensics views. */
+function productCfScore(rec) {
+  const center = rec.views.center;
+  if (center >= 0.9) return center;
+  const dino = dinoFor(rec);
+  const runExtra =
+    (dino != null && dino >= 0.15) ||
+    (center >= 0.15 && center < THRESHOLD);
+  if (!runExtra) return center;
+
+  const inspected = [center];
+  for (const name of VIEW_ORDER.slice(1)) {
+    const score = rec.views[name];
+    if (score == null) continue;
+    inspected.push(score);
+    if (score >= TTA_EARLY_EXIT) break;
+  }
+  return aggregateProductionViewScores(inspected);
+}
+
+function productFloorScore(rec, floor) {
+  const cf = productCfScore(rec);
+  const dino = dinoFor(rec);
+  if (dino == null || cf >= THRESHOLD || cf < floor) return cf;
+  return Math.max(cf, dino);
+}
 
 function adaptiveScore(rec, lo, _agg) {
   return adaptiveScoreAgg(rec, lo, (scores) => Math.max(...scores));
@@ -230,7 +267,15 @@ function report(name, records) {
 
   // Per-source recall at the operating threshold for a few key policies.
   const perSourceList = dinoByFile.size
-    ? ['center', 'always-max', 'dino-only', 'ens-max', 'ens-max-center', 'ens-smart']
+    ? [
+        'center',
+        'always-max',
+        'dino-only',
+        'ens-max',
+        'ens-smart',
+        'product-current',
+        'product-floor-0.40',
+      ]
     : ['center', 'adaptive[0.15]', 'adaptive[0]', 'always-max', 'always-top2'];
   for (const pname of perSourceList) {
     const fn = activePolicies[pname];

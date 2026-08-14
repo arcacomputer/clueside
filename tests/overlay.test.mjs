@@ -40,6 +40,15 @@ describe('overlay badges do not wrap images', () => {
     assert.match(content, /inFlight.add\(el\);\s*ensureBadge\(el\);\s*analyzeQueue/s);
   });
 
+  it('does not paint stale lazy-image results and clears badges when disabled', async () => {
+    const content = await readFile(join(ROOT, 'src/content.js'), 'utf8');
+    assert.match(content, /isCurrentAnalyzeJob\(job\)/);
+    assert.match(content, /return \{ stale: true \}/);
+    assert.match(content, /clearAllBadges\(\)/);
+    assert.match(content, /changes\.threshold/);
+    assert.match(content, /HTMLSourceElement/);
+  });
+
   it('does not style a wrapping host around photos', async () => {
     const css = await readFile(join(ROOT, 'src/overlay.css'), 'utf8');
     assert.doesNotMatch(css, /\.haid-wrap/);
@@ -71,6 +80,7 @@ describe('release zip layout', () => {
   it('stores package files relative to dist so manifest.json is at the zip root', async () => {
     const pkg = await readFile(join(ROOT, 'scripts/package.mjs'), 'utf8');
     assert.match(pkg, /toPosix\(relative\(DIST, abs\)\)/);
+    assert.match(pkg, /localeCompare/);
     assert.doesNotMatch(pkg, /join\(['"]hybrid-ai-image-detector['"]/);
   });
 });

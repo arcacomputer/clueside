@@ -5,15 +5,15 @@
 
 export const DEFAULT_THRESHOLD = 0.65;
 export const UNCERTAIN_LOW = 0.45;
-/** CF scores below this ignore DINO (Unsplash/IKEA reals stay ~0-37%). */
-export const DINO_CF_FLOOR = 0.40;
+/** CF scores below this ignore DINO, even when the DINO probe saturates. */
+export const DINO_CF_FLOOR = 0.15;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
  * CF-primary fusion: CommunityForensics stays authoritative when it is
  * confident (real or AI). DINO only lifts scores in the uncertain band
- * where CF is not already near zero, so saturated DINO on stock photos
- * cannot override a low CF score.
+ * where CF is not already near zero. Production CF TTA first averages its
+ * official center with its strongest inspected view, limiting crop outliers.
  * @param {number} cfScore CommunityForensics p(AI) after TTA
  * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
  * @returns {number}

@@ -60,6 +60,28 @@ describe('pickDownloadUrl', () => {
       'https://github.com/felirami/hybrid-ai-image-detector/releases/tag/v1.0.3'
     );
   });
+
+  it('rejects non-GitHub and wrong-repository update links', () => {
+    assert.equal(
+      pickDownloadUrl({
+        html_url: 'javascript:alert(1)',
+        assets: [
+          {
+            name: 'hybrid-ai-image-detector-9.9.9.zip',
+            browser_download_url: 'https://attacker.example/payload.zip',
+          },
+        ],
+      }),
+      null
+    );
+    assert.equal(
+      pickDownloadUrl({
+        html_url: 'https://github.com/another/repository/releases/tag/v9.9.9',
+        assets: [],
+      }),
+      null
+    );
+  });
 });
 
 describe('parseLatestRelease', () => {

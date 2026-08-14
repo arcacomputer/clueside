@@ -150,6 +150,7 @@ async function main() {
   }
 
   console.error(`Done: ${count} scored in ${((Date.now() - t0) / 1000).toFixed(0)}s -> ${out}`);
+  await session.release();
 }
 
 main().catch((err) => {

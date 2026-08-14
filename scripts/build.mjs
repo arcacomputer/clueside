@@ -10,6 +10,7 @@ const ROOT = join(__dirname, '..');
 const DIST = join(ROOT, 'dist');
 const LIB = join(DIST, 'lib');
 const MODELS = join(DIST, 'models');
+const ALLOW_MISSING_MODELS = process.env.ALLOW_MISSING_MODELS === '1';
 
 const ENTRY_POINTS = {
   'background.js': join(ROOT, 'src/background.js'),
@@ -78,11 +79,16 @@ async function copyStatic() {
     ['src/popup.html', 'popup.html'],
     ['src/overlay.css', 'overlay.css'],
     ['manifest.json', 'manifest.json'],
+    ['LICENSE', 'LICENSE'],
+    ['PRIVACY.md', 'PRIVACY.md'],
+    ['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'],
   ];
 
   for (const [src, dest] of staticFiles) {
     await cp(join(ROOT, src), join(DIST, dest));
   }
+
+  await cp(join(ROOT, 'licenses'), join(DIST, 'licenses'), { recursive: true });
 
   for (const size of [16, 48, 128]) {
     await cp(join(ROOT, 'icons', `icon${size}.png`), join(DIST, `icons/icon${size}.png`));
@@ -101,10 +107,8 @@ async function copyStatic() {
       await cp(srcModels, destModels, { recursive: true });
     } catch (err) {
       await mkdir(destModels, { recursive: true });
-      console.warn(
-        `Warning: ${parts.join('/')} weights missing. Run npm run fetch-model before loading or packaging.`
-      );
-      if (process.env.REQUIRE_MODEL === '1') throw err;
+      if (!ALLOW_MISSING_MODELS) throw err;
+      console.warn(`Warning: ${parts.join('/')} weights missing in UI-only build.`);
     }
   }
 
@@ -113,8 +117,8 @@ async function copyStatic() {
     await mustExist(probeSrc, 'models/probe/dino-probe.json');
     await cp(probeSrc, join(MODELS, 'probe', 'dino-probe.json'));
   } catch (err) {
-    console.warn('Warning: dino-probe.json missing; DINO head will be disabled in this build.');
-    if (process.env.REQUIRE_MODEL === '1') throw err;
+    if (!ALLOW_MISSING_MODELS) throw err;
+    console.warn('Warning: dino-probe.json missing in UI-only build.');
   }
 }
 

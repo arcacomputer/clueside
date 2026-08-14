@@ -2,11 +2,12 @@
 
 **Author:** Luis Felipe Abarca  
 **License:** MIT  
-**Version:** 1.0.0 (first public)
+**Version:** 1.0.8
 
 Unpacked install from GitHub (`npm run fetch-model && npm run build`, then Load unpacked from `dist/`) remains the POIDH proof path. This file is listing copy for a future Chrome Web Store upload. The extension is **not** claimed to be on the Chrome Web Store.
 
-Build the store zip with `npm run package`. The zip includes bundled WASM and the CommunityForensics FP32 ONNX (~83MB) so a store install works offline. Chrome Web Store max package size is 2GB.
+Build the store zip with `npm run package`. The zip includes bundled WASM and
+both FP32 ONNX backbones (~168 MiB total) so a store install works offline.
 
 ## Short description (132 characters max)
 
@@ -19,7 +20,12 @@ Character count: 105.
 Hybrid AI Image Detector estimates whether images on web pages (or files you drop in the popup) were likely created with AI. All inference runs on your device with WebGPU or WASM. Image bytes are not uploaded to a server.
 
 How it works
-- Two local neural heads: CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX) plus a DINOv2-small feature probe (transparent logistic head). Displayed confidence is the max of the two raw sigmoids. Default decision threshold is raw 65% p(AI), with no remapping of 50% model output to 65%.
+- Two local neural heads: CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX)
+  plus a DINOv2-small feature probe (transparent logistic head). Fusion is
+  CF-primary: CommunityForensics wins below 15% and at or above 65%; DINO may
+  lift only inside that band. CommunityForensics TTA averages its center and
+  strongest inspected crop. The decision threshold is raw 65% p(AI), with no
+  score remapping.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
 - Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 
@@ -33,7 +39,9 @@ Honesty
 - Photoreal DALL-E 3 images can score below 65%. Ordinary camera photos are the priority not to false-flag.
 - Public n=19 fixture numbers are a small test set, not a claim about a private benchmark.
 
-License: MIT. Author: Luis Felipe Abarca. Source is on GitHub.
+Original project code is MIT. Bundled third-party model and runtime licenses
+are listed in `THIRD_PARTY_NOTICES.md`. Author: Luis Felipe Abarca. Source is
+on GitHub.
 
 ## Single purpose
 
@@ -53,13 +61,10 @@ ONNX Runtime needs a document with DOM, canvas, and WebGPU or WASM. Chrome MV3 s
 
 Saves the user's raw threshold (default 65%), enable toggle, and auto-scan toggle via `chrome.storage.sync`.
 
-### unlimitedStorage
+### alarms
 
-The bundled model weights total about 171MB (CommunityForensics ~83MB + DINOv2-small ~88MB). The store package includes them. This permission is for on-device model files, not for uploading images.
-
-### activeTab
-
-Used so the toolbar popup can talk to the current tab when the user drops a file or changes settings.
+Schedules the optional once-daily GitHub release-version check. It does not
+send image or browsing data.
 
 ## Privacy policy URL
 
@@ -96,7 +101,7 @@ Do not screenshot private or copyrighted photos you do not have rights to. Use t
 
 1. `npm ci && npm run package`
 2. Open the Chrome Web Store Developer Dashboard (one-time developer registration is a Google process; this repo does not submit for you).
-3. New item, upload `release/hybrid-ai-image-detector-1.0.0.zip`
+3. New item, upload `release/hybrid-ai-image-detector-1.0.8.zip`
 4. Paste the short and detailed descriptions above
 5. Set privacy policy URL to the hosted `docs/privacy.html`
 6. Attach screenshots and the 128px icon

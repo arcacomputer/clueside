@@ -61,6 +61,37 @@ export function dinoPackedRgbToCHW(data, channels) {
 }
 
 /**
+ * Node eval path using transformers.js RawImage helpers. Keeping this beside
+ * the browser preprocessor makes the extension and reproducible harness share
+ * the same resize, center-crop, channel, and normalization policy.
+ * @param {import('@huggingface/transformers').RawImage} rawImage
+ * @returns {Promise<Float32Array>}
+ */
+export async function dinoPreprocessRawImage(rawImage) {
+  const { width: resizedW, height: resizedH } = dinoResizeDimensions(
+    rawImage.width,
+    rawImage.height
+  );
+  const resized = await rawImage.resize(resizedW, resizedH);
+  const sx = Math.floor((resizedW - DINO_CROP_SIZE) / 2);
+  const sy = Math.floor((resizedH - DINO_CROP_SIZE) / 2);
+  const cropped = await resized.crop([
+    sx,
+    sy,
+    sx + DINO_CROP_SIZE - 1,
+    sy + DINO_CROP_SIZE - 1,
+  ]);
+
+  if (cropped.width !== DINO_CROP_SIZE || cropped.height !== DINO_CROP_SIZE) {
+    throw new Error(
+      `DINO crop produced ${cropped.width}x${cropped.height}, expected ${DINO_CROP_SIZE}`
+    );
+  }
+
+  return dinoPackedRgbToCHW(cropped.data, cropped.channels);
+}
+
+/**
  * Browser path: center 224 crop from an ImageBitmap.
  * @param {ImageBitmap} bitmap
  * @returns {Float32Array}

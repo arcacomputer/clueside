@@ -9,6 +9,7 @@ import {
 import {
   neuralPAiFromLogit,
   aggregateViewScores,
+  aggregateProductionViewScores,
   shouldRunExtraCrops,
   TTA_EARLY_EXIT,
 } from './scoring.js';
@@ -112,7 +113,8 @@ export async function predictCHW(session, chw) {
 }
 
 /**
- * Score every view and take max sigmoid. Used by the harness `--tta=always` probe.
+ * Score every view and take max sigmoid. Used by diagnostics that explicitly
+ * need the unaggregated upper envelope.
  * @param {ort.InferenceSession} session
  * @param {Array<{name: string, chw: Float32Array}>} views
  */
@@ -132,8 +134,9 @@ export async function predictViews(session, views) {
 
 /**
  * Production TTA: official 440 center first. Extra crops (440 corners + 512
- * center) run only in the adaptive band, or when mode is `always`. Stops if
- * any sigmoid is >= 0.9. Does not stretch scores.
+ * center) run only in the adaptive band, or when mode is `always`. The final
+ * CF probability averages the official center with the strongest inspected
+ * view. Stops once a view is >= 0.9.
  *
  * @param {ort.InferenceSession} session
  * @param {Array<{name: string, chw: Float32Array}>} views
@@ -171,18 +174,28 @@ export async function predictAdaptiveViews(session, views, options = {}) {
     return { scores, named, neuralPAi: centerScore, extraRan: false, earlyExit: false };
   }
 
-  let max = centerScore;
   for (let i = 1; i < views.length; i++) {
     const score = await predictCHW(session, views[i].chw);
     scores.push(score);
     named.push({ name: views[i].name, score });
-    if (score > max) max = score;
     if (score >= earlyExit) {
-      return { scores, named, neuralPAi: max, extraRan: true, earlyExit: true };
+      return {
+        scores,
+        named,
+        neuralPAi: aggregateProductionViewScores(scores),
+        extraRan: true,
+        earlyExit: true,
+      };
     }
   }
 
-  return { scores, named, neuralPAi: max, extraRan: true, earlyExit: false };
+  return {
+    scores,
+    named,
+    neuralPAi: aggregateProductionViewScores(scores),
+    extraRan: true,
+    earlyExit: false,
+  };
 }
 
 /**

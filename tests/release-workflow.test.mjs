@@ -18,4 +18,18 @@ describe('GitHub Release workflow', () => {
     assert.match(yml, /GITHUB_TOKEN/);
     assert.doesNotMatch(yml, /npm publish/);
   });
+
+  it('ships project and third-party license notices in release builds', async () => {
+    const build = await readFile(join(ROOT, 'scripts/build.mjs'), 'utf8');
+    assert.match(build, /THIRD_PARTY_NOTICES\.md/);
+    assert.match(build, /\['LICENSE', 'LICENSE'\]/);
+    assert.match(build, /join\(ROOT, 'licenses'\)/);
+
+    const notices = await readFile(join(ROOT, 'THIRD_PARTY_NOTICES.md'), 'utf8');
+    assert.match(notices, /CommunityForensics/);
+    assert.match(notices, /DINOv2/);
+    assert.match(notices, /ONNX Runtime Web/);
+    assert.match(notices, /c2pa-web/);
+    assert.match(notices, /exifr/);
+  });
 });

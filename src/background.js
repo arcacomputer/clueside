@@ -3,6 +3,8 @@ import {
   parseLatestRelease,
   shouldShowUpdateBanner,
 } from './update-checker.js';
+import { isBackgroundMessage } from './messages.js';
+import { MAX_IMAGE_BASE64_CHARS } from './image-limits.js';
 
 const OFFSCREEN_URL = 'offscreen.html';
 const MIN_DIMENSION = 96;
@@ -11,7 +13,6 @@ const UPDATE_CHECK_PERIOD_MINUTES = 24 * 60;
 
 let offscreenCreating = null;
 let offscreenReadyPromise = null;
-const pendingByTab = new Map();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -219,7 +220,9 @@ async function analyzeRequest({ requestId, tabId, url, bufferB64, width, height,
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  (async () => {
+  if (!isBackgroundMessage(message)) return false;
+
+  void (async () => {
     if (message.type === 'analyze-url') {
       const tabId = sender.tab?.id;
       if (!isHttpUrl(message.url)) {
@@ -252,6 +255,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           tabId,
           url: message.url,
           error: 'Missing image payload (expected base64 bytes)',
+        });
+        return;
+      }
+      if (message.bufferB64.length > MAX_IMAGE_BASE64_CHARS) {
+        sendResponse({
+          requestId: message.requestId,
+          tabId,
+          url: message.url,
+          error: 'Image exceeds size cap',
         });
         return;
       }
@@ -312,7 +324,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(await getUpdateStatus());
       return;
     }
-  })();
+  })().catch((err) => {
+    sendResponse({ ok: false, error: err?.message || String(err) });
+  });
 
   return true;
 });

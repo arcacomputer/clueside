@@ -40,11 +40,11 @@ jobs:
             exit 1
           fi
           printf '%s\n' \
-            'First-run How to use card (pin toolbar icon, reload the tab, wait for badges). Always-visible legend for AI / OK / ? / skip. Scoring unchanged.' \
+            'First-run How to use card (pin toolbar icon, reload the tab, wait for badges). Always-visible legend for AI / OK / ? / skip.' \
             '' \
             'Unpacked Chrome extension. Download the zip, extract it, then Load unpacked in chrome://extensions (Developer mode). Pick the folder that contains manifest.json.' \
             '' \
-            'The zip is larger (~240MB) because two models ship bundled (CommunityForensics FP32 ONNX, DINOv2-small ONNX + probe, and WASM). Images stay on your device. MIT. Author: Luis Felipe Abarca.' \
+            'The zip is large because two models ship bundled (CommunityForensics FP32 ONNX, DINOv2-small ONNX + probe, and WASM). Images stay on your device. Project code is MIT; bundled third-party licenses and notices are included. Author: Luis Felipe Abarca.' \
             '' \
             'This is a GitHub Release, not a Chrome Web Store listing. Public fixture numbers are not a private-benchmark claim.' \
             > /tmp/release-notes.md

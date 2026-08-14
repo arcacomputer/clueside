@@ -151,7 +151,7 @@ Disqualifiers include cloud inference, off-device image bytes, localhost backend
 
 Live browsing behavior matters. False positives on real photos (stock sites, catalog grids, encyclopedia images) can sink an otherwise high score.
 
-Public benchmarks in this repo (for example the 893-image local bench at 96.1% BA) are directional only. They are **not** Kenny's private held-out score. Do not cite them as proof of bounty qualification.
+Public benchmarks in this repo (for example the 893-image local bench at 79.8% BA for the v1.0.8 production policy) are directional only. They are **not** Kenny's private held-out score. Do not cite them as proof of bounty qualification. The higher 96.1% legacy raw-max result is not shipped because its live false-positive behavior is unacceptable.
 
 ---
 
@@ -182,4 +182,4 @@ Known competing claims and reject patterns. Do not copy their failure modes.
 
 Other competitors named in maintainer threads: anudit, RealGuard, Rajesh, PixelWitness. Several use score remapping or Platt-style calibration that paints low raw scores as 65%.
 
-This repo's shipped fusion (v1.0.7, PR 24) uses CF-primary fusion with `DEFAULT_THRESHOLD` 0.65 on raw fused p(AI). Open follow-up: live retest on Unsplash, IKEA, Lummi, and Wikipedia before any claim.
+This repo's v1.0.8 candidate uses center-plus-strongest CF TTA averaging and CF-primary fusion with `DEFAULT_THRESHOLD` 0.65 on raw fused p(AI). A 2026-08-13 live smoke covered Unsplash, IKEA, Lummi, and Wikipedia. The captured known-real sample still had 7 false positives in 31 images, so broader live validation remains required before any claim.

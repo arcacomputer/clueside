@@ -70,7 +70,9 @@ function shouldSkip(relPosix) {
 }
 
 async function walkFiles(dir, acc = []) {
-  const entries = await readdir(dir, { withFileTypes: true });
+  const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
   for (const ent of entries) {
     const full = join(dir, ent.name);
     if (ent.isDirectory()) {
@@ -196,7 +198,7 @@ async function main() {
   await run(process.execPath, [join(ROOT, 'scripts/fetch-model.mjs')]);
 
   console.log('Building dist/...');
-  await run('npm', ['run', 'build'], { REQUIRE_MODEL: '1' });
+  await run('npm', ['run', 'build']);
 
   if (!(await exists(ONNX))) {
     throw new Error(

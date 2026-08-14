@@ -3,7 +3,8 @@
 Local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Images never leave your device; the extension never downloads models or inference assets at runtime. The only network call the installed extension makes is an optional once-a-day GitHub version check for the update banner, which sends no image data and fails silently offline.
 
 **Author:** Luis Felipe Abarca  
-**License:** MIT
+**License:** Original project code is MIT. Bundled model and runtime licenses
+are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **For contributors:** This repo targets [POIDH Arbitrum bounty 323](https://poidh.xyz/arbitrum/bounty/323). Read [AGENTS.md](AGENTS.md) for strict build, fusion, and submission rules, and [docs/POIDH-323.md](docs/POIDH-323.md) for the verbatim bounty text, Kenny clarifications, and evaluation protocol.
 
@@ -52,8 +53,8 @@ Two independent neural heads cover complementary failure modes, plus determinist
 
 1. **CommunityForensics head:** ViT-Small official FP32 ONNX (CLIP 384). `p(AI) = sigmoid(logit)`. Near-zero false positives on real photos, but under-scores several modern generators (Flux, GPT-4o-image, photoreal DALL-E 3).
 2. **DINOv2 probe head:** frozen DINOv2-small backbone (224 center view) with a transparent logistic head over CLS+mean-pooled features (`models/probe/dino-probe.json`: plain standardize/weights/bias, no lookup tables). Trained on ~9.6k images from public datasets across Flux, SD3.5, SDXL-era, Midjourney, DALL-E 3, GPT-4o-image and diverse real photos, with web-realistic JPEG/resize augmentation. This head carries the modern generators.
-3. **Neural fusion:** CF-primary with a `0.40` CF floor. When CommunityForensics is confident (`>= 0.65` AI or `< 0.40` real), its score wins. Between `0.40` and `0.65`, DINO can lift (`max(cf, dino)`), so saturated DINO on stock photos (~0-37% CF) cannot override a low CF. Displayed confidence is this raw fused probability; the AI verdict stays at raw `>= 0.65` with no remapping and no logit bias.
-4. **Adaptive TTA:** the DINO pass and the official 440 center crop always run. Extra CommunityForensics views (440 corners + 512 center) run only when a head is at least mildly suspicious (CF center or DINO in `[0.15, 0.65)`), so confident reals cost two passes total. `Math.max` of sigmoids, early exit at `>= 0.9`. Under heavy queue load (more than 12 pending) CF drops to center-only; the DINO pass still runs.
+3. **Neural fusion:** CF-primary with a `0.15` CF floor. CommunityForensics wins when its aggregated score is `>= 0.65` or `< 0.15`. Between `0.15` and `0.65`, DINO may lift with `max(cf, dino)`. A saturated DINO score still cannot override genuinely near-zero CF. Displayed confidence is the raw fused probability; the AI verdict stays at raw `>= 0.65` with no remapping and no logit bias.
+4. **Adaptive TTA:** the DINO pass and official 440 center crop always run. Extra CommunityForensics views (440 corners + 512 center) run when CF center is in `[0.15, 0.65)` or DINO is at least `0.15`. Production CF averages its center score with the strongest inspected view, which reduces one-crop outliers. Inference stops inspecting views at `>= 0.9`. Under heavy queue load (more than 12 pending) CF drops to center-only; the DINO pass still runs.
 5. **Metadata:** C2PA, EXIF/XMP/IPTC, generator text in PNG/JPEG, weak URL hints. Strong metadata forces 0.95-0.99; a URL hint alone cannot cross 65%.
 
 ## Tests
@@ -66,19 +67,21 @@ Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-mo
 
 ## Local benchmark
 
-893 images from public datasets, disjoint from probe training rows: 409 AI (DALL-E 3, Flux 1.1, GPT-4o image, Midjourney MJHQ, ELSA_D3 SD-era) and 484 real (COCO, Flickr30k, ImageNet-style, CelebA faces, Food101). "Web-stress" re-encodes every image at max 800px JPEG q78. Decision rule: raw fused score `>= 0.65`. Built and scored with the `eval/` tooling in this repo (`fetch-bench`, `sweep`, `analyze`).
+893 images from public datasets, disjoint from probe training rows: 409 AI (DALL-E 3, Flux 1.1, GPT-4o image, Midjourney MJHQ, ELSA_D3 SD-era) and 484 real (COCO, Flickr30k, ImageNet-style, CelebA faces, Food101). Decision rule: raw fused score `>= 0.65`. Built and scored with the `eval/` tooling in this repo (`fetch-bench`, `sweep`, `analyze`).
 
-| Pipeline @ raw 0.65 | Clean BA | Clean TPR/TNR | Web-stress BA | Web-stress TPR/TNR |
-|---|---|---|---|---|
-| CommunityForensics only (old production) | 71.9% | 44.0 / 99.8 | 74.0% | 48.7 / 99.4 |
-| DINOv2 probe only | 93.0% | 89.7 / 96.3 | 93.3% | 89.5 / 97.1 |
-| **Ensemble (shipped policy)** | **96.1%** | 96.1 / 96.1 | **96.1%** | 95.6 / 96.7 |
+| Pipeline @ raw 0.65 | BA | TPR | TNR |
+|---|---:|---:|---:|
+| CommunityForensics adaptive max diagnostic | 71.9% | 44.0% | 99.8% |
+| DINOv2 probe only | 93.0% | 89.7% | 96.3% |
+| Legacy raw max ensemble (not shipped) | 96.1% | 96.1% | 96.1% |
+| **v1.0.8 CF-primary production policy** | **79.8%** | **59.9%** | **99.8%** |
 
-Per-source correctness for the shipped policy on the clean bench: DALL-E 3 97%, Flux 1.1 97%, GPT-4o 95%, Midjourney 100%, SD/ELSA 91%; CelebA 100%, COCO 96%, Flickr 97%, Food101 100%, ImageNet-style 90%. The raw 0.65 operating point is within noise of this bench's optimum (0.67), so the threshold is honest, not tuned.
+The legacy raw max result is included to make the tradeoff visible, not as a product claim. It caused unacceptable false positives on live stock and catalog images, so production keeps the CF guard. Per-source correctness for v1.0.8: DALL-E 3 78%, Flux 1.1 42%, GPT-4o 15%, Midjourney 83%, SD/ELSA 67%; CelebA 100%, COCO 99%, Flickr 100%, Food101 100%, ImageNet-style 100%.
 
 ## Limitations
 
 - Local-bench numbers are not a claim about any private benchmark; distribution shift is real.
+- Modern photoreal generators remain difficult, especially GPT-4o image. Product and dramatic-lighting photos can still false-positive, so live-site checks remain required before any bounty claim.
 - Tiny thumbnails (below 96px) are skipped. Images whose bytes cannot be fetched are scored from the already-decoded pixels on the page when the canvas is readable; otherwise they show `skip`.
 - Camera Make/Model in EXIF is not proof of a real photo.
 - On CPU/WASM, the first scan of a page with dozens of photos can take tens of seconds (less with multithreaded WASM, which Chrome enables when the extension pages are cross-origin isolated). Badges stay on `...` until that image is fetched and scored. They are not marked Timed out for waiting in the queue.

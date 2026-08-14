@@ -3,6 +3,7 @@ export const GITHUB_REPO = 'hybrid-ai-image-detector';
 export const GITHUB_LATEST_RELEASE_URL =
   `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 export const RELEASE_ZIP_PREFIX = 'hybrid-ai-image-detector-';
+const RELEASE_PATH_PREFIX = `/${GITHUB_OWNER}/${GITHUB_REPO}/releases/`;
 
 const VERSION_PARTS = /^\d+(?:\.\d+){0,2}$/;
 
@@ -59,15 +60,32 @@ export function pickDownloadUrl(release) {
       typeof asset.browser_download_url === 'string'
   );
 
-  if (zipAsset?.browser_download_url) {
+  if (zipAsset?.browser_download_url && isTrustedReleaseUrl(zipAsset.browser_download_url)) {
     return zipAsset.browser_download_url;
   }
 
-  if (typeof release.html_url === 'string' && release.html_url.length > 0) {
+  if (
+    typeof release.html_url === 'string' &&
+    release.html_url.length > 0 &&
+    isTrustedReleaseUrl(release.html_url)
+  ) {
     return release.html_url;
   }
 
   return null;
+}
+
+function isTrustedReleaseUrl(value) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      url.pathname.startsWith(RELEASE_PATH_PREFIX)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function parseLatestRelease(release) {

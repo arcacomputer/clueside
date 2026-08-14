@@ -72,6 +72,13 @@ describe('popup markup', () => {
     assert.match(js, /chrome\.storage\.local/);
     assert.match(js, /WALKTHROUGH_STORAGE_KEY/);
   });
+
+  it('renders analysis text without assigning metadata to innerHTML', async () => {
+    const popup = await readFile(join(ROOT, 'src/popup.js'), 'utf8');
+    assert.match(popup, /resultEl\.replaceChildren\(\)/);
+    assert.doesNotMatch(popup, /resultEl\.innerHTML/);
+    assert.match(popup, /MAX_IMAGE_BYTES/);
+  });
 });
 
 describe('README how to use', () => {

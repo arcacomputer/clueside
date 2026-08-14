@@ -6,27 +6,16 @@
  * anything at runtime.
  */
 
-import { mkdir, writeFile, access } from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
+import { mkdir, writeFile, access, rename, rm, stat } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MODEL_SPECS, buildModelManifest, modelFileUrl } from './model-specs.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-
-const MODELS = [
-  {
-    repo: 'buildborderless/CommunityForensics-DeepfakeDet-ViT',
-    files: ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'],
-    manifest: { dtype: 'fp32', onnx: 'onnx/model.onnx', inputSize: 384 },
-  },
-  {
-    repo: 'Xenova/dinov2-small',
-    files: ['onnx/model.onnx', 'preprocessor_config.json', 'config.json'],
-    manifest: { dtype: 'fp32', onnx: 'onnx/model.onnx', inputSize: 224 },
-  },
-];
 
 async function exists(path) {
   try {
@@ -37,34 +26,72 @@ async function exists(path) {
   }
 }
 
-async function download(url, dest) {
+async function sha256File(path) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function fileMatches(path, file) {
+  if (!(await exists(path))) return false;
+  const info = await stat(path);
+  if (info.size !== file.bytes) return false;
+  return (await sha256File(path)) === file.sha256;
+}
+
+async function downloadVerified(url, dest, file) {
   console.log(`Downloading ${url}`);
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) {
     throw new Error(`Failed to download ${url}: ${res.status} ${res.statusText}`);
   }
+
+  const declaredBytes = Number(res.headers.get('content-length') || 0);
+  if (declaredBytes && declaredBytes !== file.bytes) {
+    throw new Error(
+      `Unexpected Content-Length for ${file.path}: ${declaredBytes} (expected ${file.bytes})`
+    );
+  }
+
   await mkdir(dirname(dest), { recursive: true });
-  await pipeline(res.body, createWriteStream(dest));
+  const temp = `${dest}.download-${process.pid}-${Date.now()}`;
+  try {
+    await pipeline(res.body, createWriteStream(temp, { flags: 'wx' }));
+    if (!(await fileMatches(temp, file))) {
+      const actualBytes = (await stat(temp)).size;
+      const actualHash = await sha256File(temp);
+      throw new Error(
+        `Integrity check failed for ${file.path}: ${actualBytes} bytes, sha256 ${actualHash}`
+      );
+    }
+
+    await rm(dest, { force: true });
+    await rename(temp, dest);
+  } finally {
+    await rm(temp, { force: true });
+  }
 }
 
 async function main() {
-  for (const model of MODELS) {
+  for (const model of MODEL_SPECS) {
     const modelDir = join(ROOT, 'models', model.repo);
-    const base = `https://huggingface.co/${model.repo}/resolve/main`;
     await mkdir(modelDir, { recursive: true });
 
     for (const file of model.files) {
-      const dest = join(modelDir, file);
-      if (await exists(dest)) {
-        console.log(`Already present: ${model.repo}/${file}`);
+      const dest = join(modelDir, file.path);
+      if (await fileMatches(dest, file)) {
+        console.log(`Verified: ${model.repo}/${file.path}`);
         continue;
       }
-      await download(`${base}/${file}`, dest);
+      if (await exists(dest)) {
+        console.log(`Replacing unverified file: ${model.repo}/${file.path}`);
+      }
+      await downloadVerified(modelFileUrl(model, file), dest, file);
     }
 
     await writeFile(
       join(modelDir, 'manifest.json'),
-      JSON.stringify({ id: model.repo, ...model.manifest, fetchedAt: new Date().toISOString() }, null, 2)
+      `${JSON.stringify(buildModelManifest(model), null, 2)}\n`
     );
   }
 

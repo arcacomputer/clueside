@@ -5,6 +5,7 @@ import {
   dinoPoolFeatures,
   dinoProbeScore,
   dinoPackedRgbToCHW,
+  dinoPreprocessRawImage,
   DINO_CROP_SIZE,
 } from '../src/dino.js';
 import { fuseNeuralScores } from '../src/fuse.js';
@@ -67,6 +68,37 @@ describe('dinoPackedRgbToCHW', () => {
   });
 });
 
+describe('dinoPreprocessRawImage', () => {
+  it('uses the shared 256-short-edge center crop', async () => {
+    const plane = DINO_CROP_SIZE * DINO_CROP_SIZE;
+    let resizeArgs = null;
+    let cropArgs = null;
+    const rawImage = {
+      width: 1024,
+      height: 768,
+      async resize(width, height) {
+        resizeArgs = [width, height];
+        return {
+          async crop(box) {
+            cropArgs = box;
+            return {
+              width: DINO_CROP_SIZE,
+              height: DINO_CROP_SIZE,
+              channels: 3,
+              data: new Uint8Array(plane * 3),
+            };
+          },
+        };
+      },
+    };
+
+    const chw = await dinoPreprocessRawImage(rawImage);
+    assert.deepEqual(resizeArgs, [341, 256]);
+    assert.deepEqual(cropArgs, [58, 16, 281, 239]);
+    assert.equal(chw.length, 3 * plane);
+  });
+});
+
 describe('fuseNeuralScores', () => {
   it('trusts CF when it is already confident AI', () => {
     assert.equal(fuseNeuralScores(0.8, 0.1), 0.8);
@@ -75,7 +107,7 @@ describe('fuseNeuralScores', () => {
 
   it('does not let saturated DINO override a near-zero CF', () => {
     assert.equal(fuseNeuralScores(0.02, 0.99), 0.02);
-    assert.equal(fuseNeuralScores(0.37, 1), 0.37);
+    assert.equal(fuseNeuralScores(0.149, 1), 0.149);
   });
 
   it('lets DINO lift uncertain CF scores', () => {

@@ -23,7 +23,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Apache-2.0 (or other non-MIT) model weights in the shipped zip** if we can avoid them. Submission license is MIT. Second heads must be MIT-clean.
 - **Chrome Web Store publish** or paying the $5 developer fee unless the repo owner explicitly asks.
 - **On-chain POIDH claim, wallet connect, gas spend, or "we won" public claim** without the repo owner's explicit OK.
-- **Invented metrics, fake screenshots, or citing the public 893-image 96.1% BA as Kenny's private score.** It is not.
+- **Invented metrics, fake screenshots, or citing any public benchmark as Kenny's private score.** It is not.
 
 ---
 
@@ -32,7 +32,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Manifest V3.** `onnxruntime-web` in an offscreen document. WebGPU with WASM fallback (probe the adapter; do not latch a WebGPU error).
 - **Auto-scan ordinary webpages.** Confidence on every badge: AI / OK / uncertain.
 - **Hybrid is allowed:** neural + C2PA + EXIF/XMP + PNG/JPEG comments + weak URL hints. A URL hint alone must not cross 0.65.
-- **Current shipped fusion (v1.0.7, PR 24): CF-primary.** CommunityForensics is authoritative when CF >= 0.65 or CF < 0.40. DINO may only lift when CF is in [0.40, 0.65). **Do not restore raw max(CF, DINO).** That painted Unsplash/IKEA real photos AI 100%.
+- **Current candidate fusion (v1.0.8): CF-primary.** CommunityForensics TTA averages the official center with its strongest inspected view. CF is authoritative when CF >= 0.65 or CF < 0.15. DINO may only lift when CF is in [0.15, 0.65). **Do not restore raw max(CF, DINO).** It painted many Unsplash/IKEA real photos AI.
 - **Overlay:** badge store must be an iterable `Map`, not a `WeakMap`. Reposition on scroll / resize / `visualViewport` / mutations. Never wrap images.
 - **Load-unpacked users do not auto-update.** GitHub Releases zip + popup banner is the update path. Do not assume CWS.
 - **Cross-device:** macOS (owner), Windows, Linux. WASM must work when WebGPU has no adapter.
@@ -65,7 +65,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 
 | File | Role |
 |---|---|
-| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.40, CF-primary `fuseNeuralScores` |
+| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.15, CF-primary `fuseNeuralScores` |
 | `src/offscreen.js` | ORT WebGPU/WASM, DINO 224 then CF TTA |
 | `src/content.js` | scan, fixed badges, `Map` badgeByEl |
 | `src/community-forensics.js` | CommunityForensics ViT head |
@@ -74,7 +74,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 | `src/c2pa-reader.js` | C2PA reader |
 
 - Issue 23 (fixed in PR 24 / v1.0.7): overlay WeakMap drift + DINO max false positives.
-- **Open follow-up:** live-retest Unsplash/IKEA/Lummi/Wikipedia on 1.0.7 before any claim.
+- Live smoke on 2026-08-13: v1.0.8 policy held the v1.0.7 known-real false-positive count on the captured sample while improving the public fixture. Seven of 31 captured known-real images still false-positive, so this remains a claim blocker pending broader live validation.
 
 ---
 

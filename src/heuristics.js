@@ -5,21 +5,35 @@
 import exifr from 'exifr';
 import { readC2paAiSignal } from './c2pa-reader.js';
 
-const AI_SOFTWARE_PATTERNS = [
+// Safe in unstructured text because each phrase names a specific tool.
+const STRONG_AI_GENERATOR_PATTERNS = [
   /midjourney/i,
   /dall[\s-]?e/i,
   /chatgpt/i,
   /adobe\s*firefly/i,
-  /\bfirefly\b/i,
   /stable\s*diffusion/i,
   /\bcomfyui\b/i,
+  /\bflux(?:[.\s_-]*1)?[.\s_-]*(?:dev|schnell|pro)\b/i,
+  /black\s+forest\s+labs/i,
+  /\bgrok\s+(?:imagine|image(?:\s+generator)?)\b/i,
+  /\b(?:google\s+)?imagen\s*[234]\b/i,
+  /\bleonardo(?:\.ai|\s+ai)\b/i,
+  /automatic1111/i,
+  /\ba1111\b/i,
+];
+
+// Ambiguous product names are strong only inside software/tool fields.
+const AI_TOOL_FIELD_PATTERNS = [
+  ...STRONG_AI_GENERATOR_PATTERNS,
+  /\bfirefly\b/i,
   /\bflux\b/i,
   /\bgrok\b/i,
   /\bimagen\b/i,
   /\bleonardo\b/i,
-  /automatic1111/i,
-  /\ba1111\b/i,
 ];
+
+const GENERATION_PARAMETER_PATTERN =
+  /negative prompt|cfg\s*scale|sampler\s*:|steps\s*:\s*\d+|scheduler\s*:/i;
 
 const URL_HINT_PATTERNS = [
   { pattern: /oaidalleapiprodscus/i, reason: 'URL suggests OpenAI image CDN' },
@@ -37,7 +51,7 @@ const C2PA_AI_TYPES = new Set([
   'compositeWithTrainedAlgorithmicMedia',
 ]);
 
-const PNG_TEXT_KEYS = ['parameters', 'prompt', 'workflow', 'comfy', 'software'];
+const PNG_TOOL_KEYS = ['parameters', 'workflow', 'comfy', 'software', 'generator', 'creator tool'];
 
 /**
  * @param {ArrayBuffer} buffer
@@ -125,37 +139,68 @@ export async function parseExifMetadata(buffer) {
       reviveValues: false,
     });
 
-    if (!tags) return { ai: false, reason: null };
-
-    const fields = [
-      tags.Software,
-      tags.CreatorTool,
-      tags.DigitalSourceType,
-      tags['Iptc.Application2.Program'],
-      tags['Iptc.Application2.ProgramVersion'],
-    ];
-
-    const blob = JSON.stringify(tags);
-    const combined = [...fields.filter(Boolean), blob].join(' ');
-
-    for (const pattern of AI_SOFTWARE_PATTERNS) {
-      if (pattern.test(combined)) {
-        const match = combined.match(pattern);
-        return {
-          ai: true,
-          reason: `Metadata mentions AI generator software (${match?.[0] || 'detected'})`,
-        };
-      }
-    }
-
-    if (/trainedAlgorithmicMedia|compositeWithTrainedAlgorithmicMedia/i.test(combined)) {
-      return {
-        ai: true,
-        reason: 'XMP/IPTC DigitalSourceType indicates algorithmic media',
-      };
-    }
+    return detectAiMetadataTags(tags);
   } catch {
     // Missing or corrupt EXIF is not evidence of AI.
+  }
+
+  return { ai: false, reason: null };
+}
+
+/**
+ * Restrict ambiguous names such as "Flux", "Firefly", and "Leonardo" to
+ * fields that actually identify the creating software. Scanning every EXIF
+ * caption, keyword, artist, and copyright field can turn ordinary subjects
+ * into a forced 97% AI verdict.
+ *
+ * @param {Record<string, unknown>|null|undefined} tags
+ */
+export function detectAiMetadataTags(tags) {
+  if (!tags || typeof tags !== 'object') return { ai: false, reason: null };
+
+  const digitalSource = stringValues([
+    tags.DigitalSourceType,
+    tags.digitalSourceType,
+  ]).join(' ');
+  if (/trainedAlgorithmicMedia|compositeWithTrainedAlgorithmicMedia/i.test(digitalSource)) {
+    return {
+      ai: true,
+      reason: 'XMP/IPTC DigitalSourceType indicates algorithmic media',
+    };
+  }
+
+  const toolFields = stringValues([
+    tags.Software,
+    tags.CreatorTool,
+    tags.HistorySoftwareAgent,
+    tags['Iptc.Application2.Program'],
+    tags['Iptc.Application2.ProgramVersion'],
+  ]).join(' ');
+  const toolMatch = firstMatch(toolFields, AI_TOOL_FIELD_PATTERNS);
+  if (toolMatch) {
+    return {
+      ai: true,
+      reason: `Metadata names AI generator software (${toolMatch})`,
+    };
+  }
+
+  const parameterFields = stringValues([
+    tags.Parameters,
+    tags.parameters,
+    tags.UserComment,
+    tags.Comment,
+    tags.GenerationData,
+  ]).join(' ');
+  if (GENERATION_PARAMETER_PATTERN.test(parameterFields)) {
+    return { ai: true, reason: 'Metadata contains image-generation parameters' };
+  }
+
+  const strongMatch = firstMatch(parameterFields, STRONG_AI_GENERATOR_PATTERNS);
+  if (strongMatch) {
+    return {
+      ai: true,
+      reason: `Metadata names AI generator software (${strongMatch})`,
+    };
   }
 
   return { ai: false, reason: null };
@@ -169,15 +214,14 @@ export function scanEmbeddedText(bytes) {
     const pngText = parsePngTextChunks(bytes);
     for (const [key, value] of pngText) {
       const hay = `${key} ${value}`;
-      if (PNG_TEXT_KEYS.some((k) => key.toLowerCase().includes(k))) {
-        if (/steps|sampler|cfg\s*scale|negative prompt/i.test(hay)) {
-          return { ai: true, reason: 'PNG text chunk contains generation parameters (A1111/ComfyUI)' };
-        }
+      const keyLower = key.toLowerCase();
+      if (GENERATION_PARAMETER_PATTERN.test(hay)) {
+        return { ai: true, reason: 'PNG text chunk contains generation parameters (A1111/ComfyUI)' };
       }
-      for (const pattern of AI_SOFTWARE_PATTERNS) {
-        if (pattern.test(hay)) {
-          return { ai: true, reason: `PNG metadata mentions ${pattern.source.replace(/\\b/g, '').slice(0, 40)}` };
-        }
+
+      if (PNG_TOOL_KEYS.some((toolKey) => keyLower.includes(toolKey))) {
+        const match = firstMatch(hay, AI_TOOL_FIELD_PATTERNS);
+        if (match) return { ai: true, reason: `PNG metadata names AI generator software (${match})` };
       }
     }
   }
@@ -191,12 +235,9 @@ export function scanEmbeddedText(bytes) {
   if (isJpeg(bytes)) {
     const com = extractJpegComment(bytes);
     if (com) {
-      for (const pattern of AI_SOFTWARE_PATTERNS) {
-        if (pattern.test(com)) {
-          return { ai: true, reason: 'JPEG comment references AI generator software' };
-        }
-      }
-      if (/steps|sampler|cfg/i.test(com)) {
+      const match = firstMatch(com, STRONG_AI_GENERATOR_PATTERNS);
+      if (match) return { ai: true, reason: `JPEG comment names AI generator software (${match})` };
+      if (GENERATION_PARAMETER_PATTERN.test(com)) {
         return { ai: true, reason: 'JPEG comment contains generation parameters' };
       }
     }
@@ -325,6 +366,19 @@ function latin1Decode(bytes) {
   return s;
 }
 
-function clamp01(v) {
-  return Math.max(0, Math.min(1, v));
+function stringValues(values) {
+  return values.flatMap((value) => {
+    if (typeof value === 'string' || typeof value === 'number') return [String(value)];
+    if (Array.isArray(value)) return value.filter((item) => typeof item === 'string');
+    return [];
+  });
+}
+
+function firstMatch(text, patterns) {
+  if (!text) return null;
+  for (const pattern of patterns) {
+    const match = String(text).match(pattern);
+    if (match) return match[0];
+  }
+  return null;
 }
