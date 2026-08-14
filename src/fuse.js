@@ -16,15 +16,18 @@ export const URL_HINT_MAX_BOOST = 0.05;
  * cannot override a low CF score.
  * @param {number} cfScore CommunityForensics p(AI) after TTA
  * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
+ * @param {{ graphicGate?: boolean }} [options]
  * @returns {number}
  */
-export function fuseNeuralScores(cfScore, dinoScore) {
+export function fuseNeuralScores(cfScore, dinoScore, options = {}) {
   const cf = clamp01(cfScore);
   if (dinoScore == null || Number.isNaN(dinoScore)) return cf;
   const dino = clamp01(dinoScore);
 
   if (cf >= DEFAULT_THRESHOLD) return cf;
   if (cf < DINO_CF_FLOOR) return cf;
+
+  if (options.graphicGate) return cf;
 
   return Math.max(cf, dino);
 }

@@ -52,6 +52,18 @@ describe('fuseNeuralScores policy', () => {
     assert.equal(fused, 0.37);
     assert.equal(isAiAtThreshold(fused), false);
   });
+
+  it('graphic gate suppresses DINO lift in the uncertain band', () => {
+    const fused = fuseNeuralScores(0.52, 0.88, { graphicGate: true });
+    assert.equal(fused, 0.52);
+    assert.equal(isAiAtThreshold(fused), false);
+  });
+
+  it('graphic gate does not hide CF-confident AI illustrations', () => {
+    const fused = fuseNeuralScores(0.72, 0.12, { graphicGate: true });
+    assert.equal(fused, 0.72);
+    assert.equal(isAiAtThreshold(fused), true);
+  });
 });
 
 describe('fuseScores', () => {

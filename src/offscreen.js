@@ -1,8 +1,11 @@
 import * as ort from 'onnxruntime-web';
 import { analyzeHeuristics } from './heuristics.js';
-import { fuseScores, fuseNeuralScores, DEFAULT_THRESHOLD } from './fuse.js';
+import { DEFAULT_THRESHOLD } from './fuse.js';
 import { preprocessBitmap, preprocessBitmapViews } from './clip-preprocess.js';
 import { base64ToBytes, toArrayBuffer } from './bytes.js';
+import { analyzeGraphicGate } from './graphic-gate.js';
+import { effectiveTtaMode, fuseInferenceScores } from './inference-policy.js';
+import { MAX_IMAGE_BYTES, readResponseBytes } from './image-limits.js';
 import {
   configureOrtLogging,
   createCommunityForensicsSession,
@@ -22,7 +25,6 @@ import {
   dinoPreprocessBitmap,
   dinoScoreHiddenState,
 } from './dino.js';
-import { TTA_ADAPTIVE_LOW } from './scoring.js';
 import { FETCH_TIMEOUT_MS, INFERENCE_TIMEOUT_MS } from './analyze-retry.js';
 import {
   createExclusiveLock,
@@ -31,7 +33,6 @@ import {
 } from './analyze-queue.js';
 
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const PROBE_URL_PATH = 'models/probe/dino-probe.json';
 
 let session = null;
@@ -172,17 +173,7 @@ async function fetchImageBytes(url) {
       throw new Error(`Not an image content-type (${type})`);
     }
 
-    const cl = Number(res.headers.get('content-length') || 0);
-    if (cl > MAX_IMAGE_BYTES) {
-      throw new Error('Image exceeds size cap');
-    }
-
-    const buffer = await res.arrayBuffer();
-    if (buffer.byteLength > MAX_IMAGE_BYTES) {
-      throw new Error('Image exceeds size cap');
-    }
-
-    return buffer;
+    return readResponseBytes(res, MAX_IMAGE_BYTES);
   } catch (err) {
     if (err?.name === 'AbortError') {
       throw new Error('Image fetch timed out');
@@ -226,7 +217,7 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   const mode = normalizeTtaMode(ttaMode);
   const activeThreshold = customThreshold ?? threshold;
 
-  let neuralPAi = 0.5;
+  let fused;
   let modelError = null;
 
   try {
@@ -235,10 +226,7 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
     const blob = new Blob([bytes], { type: mime });
     const bitmap = await createImageBitmap(blob);
     try {
-      // DINO head first: one cheap 224 pass that carries the modern
-      // generators CF under-scores. Fusion is CF-primary, so a saturated
-      // DINO cannot override a near-zero CF; CF TTA still runs when DINO
-      // is mildly suspicious to rescue photoreal misses.
+      const graphicGate = analyzeGraphicGate(bitmap).isGraphic;
       const dinoPAi = await dinoScore(bitmap);
 
       let cfPAi;
@@ -247,25 +235,27 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
         cfPAi = await predictCHW(activeSession, chw);
       } else {
         const views = await preprocessBitmapViews(bitmap);
-        const dinoSuspicious = dinoPAi != null && dinoPAi >= TTA_ADAPTIVE_LOW;
-        const effectiveMode = mode === 'adaptive' && dinoSuspicious ? 'always' : mode;
+        const effectiveMode = effectiveTtaMode(mode, dinoPAi);
         cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
       }
 
-      neuralPAi = fuseNeuralScores(cfPAi, dinoPAi);
+      fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold, {
+        graphicGate,
+      });
+      if (graphicGate && cfPAi < DEFAULT_THRESHOLD) {
+        fused.reasons.push('Flat graphic gate: DINO lift suppressed');
+      }
     } finally {
       bitmap.close();
     }
   } catch (err) {
     modelError = err.message || String(err);
     if (heuristics.c2paAi || heuristics.metadataAi) {
-      neuralPAi = 0.5;
+      fused = fuseInferenceScores(0.5, null, heuristics, activeThreshold);
     } else {
       throw err;
     }
   }
-
-  const fused = fuseScores(neuralPAi, heuristics, activeThreshold);
 
   return {
     ...fused,
