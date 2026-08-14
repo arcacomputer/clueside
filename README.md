@@ -5,6 +5,8 @@ Local Manifest V3 Chrome extension that estimates whether images on the web (or 
 **Author:** Luis Felipe Abarca  
 **License:** MIT
 
+**For contributors:** This repo targets [POIDH Arbitrum bounty 323](https://poidh.xyz/arbitrum/bounty/323). Read [AGENTS.md](AGENTS.md) for strict build, fusion, and submission rules, and [docs/POIDH-323.md](docs/POIDH-323.md) for the verbatim bounty text, Kenny clarifications, and evaluation protocol.
+
 ## How to use
 
 1. Pin the toolbar icon (Chrome puzzle, then pin).
