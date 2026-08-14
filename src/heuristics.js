@@ -203,6 +203,30 @@ export function detectAiMetadataTags(tags) {
     };
   }
 
+  // Descriptive fields are unstructured, so accept only the generator names
+  // that are specific enough for free text. Ambiguous names such as "Flux"
+  // and "Firefly" remain restricted to the tool fields above.
+  const descriptiveFields = stringValues([
+    tags.ImageDescription,
+    tags.Description,
+    tags.Caption,
+    tags.CaptionAbstract,
+    tags.Title,
+    tags.Headline,
+    tags.Subject,
+    tags.Keywords,
+    tags.XPTitle,
+    tags.XPComment,
+    tags.XPSubject,
+  ]).join(' ');
+  const descriptiveMatch = firstMatch(descriptiveFields, STRONG_AI_GENERATOR_PATTERNS);
+  if (descriptiveMatch) {
+    return {
+      ai: true,
+      reason: `Metadata names AI generator software (${descriptiveMatch})`,
+    };
+  }
+
   return { ai: false, reason: null };
 }
 
@@ -215,11 +239,24 @@ export function scanEmbeddedText(bytes) {
     for (const [key, value] of pngText) {
       const hay = `${key} ${value}`;
       const keyLower = key.toLowerCase();
-      if (GENERATION_PARAMETER_PATTERN.test(hay)) {
+      const isToolField = PNG_TOOL_KEYS.some((toolKey) => keyLower.includes(toolKey));
+
+      // Generation-parameter syntax is meaningful only in fields used by
+      // generator workflows. Ordinary Title/Description prose must not force
+      // a 97% AI verdict merely because it says "negative prompt".
+      if (isToolField && GENERATION_PARAMETER_PATTERN.test(hay)) {
         return { ai: true, reason: 'PNG text chunk contains generation parameters (A1111/ComfyUI)' };
       }
 
-      if (PNG_TOOL_KEYS.some((toolKey) => keyLower.includes(toolKey))) {
+      const strongMatch = firstMatch(value, STRONG_AI_GENERATOR_PATTERNS);
+      if (strongMatch) {
+        return {
+          ai: true,
+          reason: `PNG metadata names AI generator software (${strongMatch})`,
+        };
+      }
+
+      if (isToolField) {
         const match = firstMatch(hay, AI_TOOL_FIELD_PATTERNS);
         if (match) return { ai: true, reason: `PNG metadata names AI generator software (${match})` };
       }
@@ -228,7 +265,9 @@ export function scanEmbeddedText(bytes) {
 
   const latin = latin1Decode(bytes.subarray(0, Math.min(bytes.length, 512 * 1024)));
 
-  if (/ComfyUI|CFG scale|Sampler:|civitai/i.test(latin)) {
+  // Raw byte scanning is not field-aware. Keep it to specific tool names;
+  // generic parameter words are handled only in parsed metadata fields.
+  if (/ComfyUI|civitai|AUTOMATIC1111/i.test(latin)) {
     return { ai: true, reason: 'Embedded text references AI generation toolchain' };
   }
 

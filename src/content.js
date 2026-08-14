@@ -11,7 +11,7 @@ import {
 import { createAnalyzeQueue } from './analyze-queue.js';
 import { pickImageUrl } from './image-url.js';
 import { readElementPixels, shouldTryElementPixels } from './element-pixels.js';
-import { isAnalyzeJobCurrent } from './image-job.js';
+import { isAnalyzeJobCurrent, unseenBackgroundUrls } from './image-job.js';
 import { MAX_IMAGE_BYTES, readResponseBytes } from './image-limits.js';
 
 const MIN_SIZE = 96;
@@ -21,6 +21,8 @@ const inFlight = new WeakSet();
 const waitingForLoad = new WeakSet();
 const watchedImageLoads = new WeakSet();
 const seenUrl = new WeakMap();
+const seenBackgroundState = new WeakMap();
+const deferredRescan = new WeakSet();
 let enabled = true;
 let autoScan = true;
 let scanGeneration = 0;
@@ -210,7 +212,17 @@ function renderBadge(el, result) {
   badge.title = lines.join('\n');
 }
 
-function markFinal(el, url) {
+function markFinal(el, url, source) {
+  if (source === 'background') {
+    let state = seenBackgroundState.get(el);
+    if (!state || state.generation !== scanGeneration) {
+      state = { generation: scanGeneration, urls: new Set() };
+      seenBackgroundState.set(el, state);
+    }
+    state.urls.add(url);
+    return;
+  }
+
   seenGeneration.set(el, scanGeneration);
   seenUrl.set(el, url);
 }
@@ -218,18 +230,19 @@ function markFinal(el, url) {
 function forgetResult(el) {
   seenGeneration.delete(el);
   seenUrl.delete(el);
+  seenBackgroundState.delete(el);
 }
 
-function finalizeResult(el, result, url) {
+function finalizeResult(el, result, url, source) {
   if (result?.error && isFetchSkipError(result.error)) {
     renderBadge(el, toSkipResult(result.error));
-    markFinal(el, url);
+    markFinal(el, url, source);
     return;
   }
 
   renderBadge(el, result);
   if (!result?.error || !isTransientAnalyzeError(result.error)) {
-    markFinal(el, url);
+    markFinal(el, url, source);
   }
 }
 
@@ -378,7 +391,7 @@ async function runAnalyzeJob(job, { ttaMode }) {
 
   if (!isCurrentAnalyzeJob(job)) return { stale: true };
 
-  finalizeResult(el, result, url);
+  finalizeResult(el, result, url, source);
   return { stale: false };
 }
 
@@ -389,8 +402,19 @@ const analyzeQueue = createAnalyzeQueue({
 function queueImage(el, url, source) {
   if (!enabled || !autoScan || !url) return;
   if (!document.contains(el)) return;
-  if (inFlight.has(el)) return;
-  if (seenGeneration.get(el) === scanGeneration && seenUrl.get(el) === url) return;
+  if (inFlight.has(el)) {
+    deferredRescan.add(el);
+    return;
+  }
+  if (
+    source === 'img' &&
+    seenGeneration.get(el) === scanGeneration &&
+    seenUrl.get(el) === url
+  ) return;
+  if (source === 'background') {
+    const state = seenBackgroundState.get(el);
+    if (state?.generation === scanGeneration && state.urls.has(url)) return;
+  }
   if (!isVisible(el)) return;
 
   const job = { el, url, source, generation: scanGeneration };
@@ -405,14 +429,15 @@ function queueImage(el, url, source) {
     })
     .catch((err) => {
       if (isCurrentAnalyzeJob(job)) {
-        finalizeResult(el, { error: err?.message || String(err) }, url);
+        finalizeResult(el, { error: err?.message || String(err) }, url, source);
       } else {
         stale = true;
       }
     })
     .finally(() => {
       inFlight.delete(el);
-      if (stale) rescanJobTarget(job);
+      const rescanWasDeferred = deferredRescan.delete(el);
+      if (stale || rescanWasDeferred) rescanJobTarget(job);
     });
 }
 
@@ -444,7 +469,9 @@ function scanImg(el) {
 function scanBackground(el) {
   if (!enabled || !autoScan) return;
   if (el.classList?.contains('haid-badge') || el.classList?.contains('haid-wrap')) return;
-  for (const url of collectBackgroundUrls(el)) {
+  const state = seenBackgroundState.get(el);
+  const seen = state?.generation === scanGeneration ? state.urls : [];
+  for (const url of unseenBackgroundUrls(collectBackgroundUrls(el), seen)) {
     queueImage(el, url, 'background');
   }
 }

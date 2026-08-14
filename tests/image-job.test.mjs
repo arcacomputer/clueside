@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isAnalyzeJobCurrent } from '../src/image-job.js';
+import { isAnalyzeJobCurrent, unseenBackgroundUrls } from '../src/image-job.js';
 
 const baseState = {
   enabled: true,
@@ -51,5 +51,24 @@ describe('isAnalyzeJobCurrent', () => {
     assert.equal(isAnalyzeJobCurrent(backgroundJob, { ...baseState, connected: false }), false);
     assert.equal(isAnalyzeJobCurrent(backgroundJob, { ...baseState, enabled: false }), false);
     assert.equal(isAnalyzeJobCurrent(backgroundJob, { ...baseState, backgroundUrls: [] }), false);
+  });
+});
+
+describe('unseenBackgroundUrls', () => {
+  it('keeps newly added CSS background layers after an earlier URL was scored', () => {
+    assert.deepEqual(
+      unseenBackgroundUrls(
+        ['https://images.example/a.jpg', 'https://images.example/b.jpg'],
+        ['https://images.example/a.jpg']
+      ),
+      ['https://images.example/b.jpg']
+    );
+  });
+
+  it('deduplicates CSS layers and ignores empty URLs', () => {
+    assert.deepEqual(
+      unseenBackgroundUrls(['a.jpg', '', 'a.jpg', 'b.jpg'], []),
+      ['a.jpg', 'b.jpg']
+    );
   });
 });

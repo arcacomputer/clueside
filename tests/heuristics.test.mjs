@@ -59,6 +59,17 @@ describe('AI metadata detection', () => {
     });
     assert.deepEqual(result, { ai: false, reason: null });
   });
+
+  it('detects explicit generator names in standard descriptive fields', () => {
+    assert.equal(
+      detectAiMetadataTags({ ImageDescription: 'Generated with Midjourney' }).ai,
+      true
+    );
+    assert.equal(
+      detectAiMetadataTags({ CaptionAbstract: 'Created using Stable Diffusion' }).ai,
+      true
+    );
+  });
 });
 
 describe('embedded text detection', () => {
@@ -74,6 +85,30 @@ describe('embedded text detection', () => {
     assert.equal(scanEmbeddedText(pngText('Software', 'ComfyUI')).ai, true);
     assert.equal(
       scanEmbeddedText(pngText('parameters', 'Steps: 28, Sampler: Euler, CFG scale: 6')).ai,
+      true
+    );
+  });
+
+  it('does not treat generation-like ordinary PNG prose as tool metadata', () => {
+    assert.deepEqual(
+      scanEmbeddedText(
+        pngText('Description', 'The article compares a negative prompt with scheduler: policy')
+      ),
+      { ai: false, reason: null }
+    );
+    assert.deepEqual(
+      scanEmbeddedText(pngText('Title', 'Negative prompt examples, sampler: survey')),
+      { ai: false, reason: null }
+    );
+  });
+
+  it('detects explicit generator provenance in unstructured PNG text', () => {
+    assert.equal(
+      scanEmbeddedText(pngText('Description', 'Generated with Midjourney')).ai,
+      true
+    );
+    assert.equal(
+      scanEmbeddedText(pngText('prompt', 'Stable Diffusion portrait of a city')).ai,
       true
     );
   });

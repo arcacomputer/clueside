@@ -13,6 +13,7 @@ All of these are dev-only and never ship in the extension:
 - `degrade.mjs <in> <out>` — web-realistic copies (max 800px, JPEG q78) via macOS `sips`.
 - `sweep.mjs <dir> <out.jsonl>` — score every TTA view per image with onnxruntime-node (no early exit) for offline policy simulation.
 - `analyze.mjs <sweep.jsonl> [--dino=scores.jsonl]` — simulate TTA policies / thresholds / ensembles, report BA/TPR/TNR per source.
+- `analyze.mjs` also reports Brier score and 10-bin expected calibration error for the fixed production policy. These are raw-score diagnostics only; they do not remap scores or change the 0.65 decision rule.
 - `fetch-train.mjs <dir>` — probe TRAINING set, disjoint from the bench (different datasets, or row offsets ≥ 200).
 - `extract-features.mjs <dir> <dino.onnx> <prefix> [--augment]` — DINOv2 CLS+mean features; `--augment` adds JPEG/resize degradation (training only).
 - `train-probe.mjs <prefix> <probe.json>` — logistic head with a hash-split validation report.

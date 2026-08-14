@@ -49,6 +49,13 @@ describe('overlay badges do not wrap images', () => {
     assert.match(content, /HTMLSourceElement/);
   });
 
+  it('defers a rescan when another background layer is added in flight', async () => {
+    const content = await readFile(join(ROOT, 'src/content.js'), 'utf8');
+    assert.match(content, /deferredRescan\.add\(el\)/);
+    assert.match(content, /deferredRescan\.delete\(el\)/);
+    assert.match(content, /unseenBackgroundUrls/);
+  });
+
   it('does not style a wrapping host around photos', async () => {
     const css = await readFile(join(ROOT, 'src/overlay.css'), 'utf8');
     assert.doesNotMatch(css, /\.haid-wrap/);

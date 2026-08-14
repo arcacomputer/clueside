@@ -29,3 +29,25 @@ export function isAnalyzeJobCurrent(job, state) {
 
   return false;
 }
+
+/**
+ * Return each currently rendered background URL that has not been scored in
+ * this scan generation. CSS can contain multiple background layers, and the
+ * content script processes them serially per element.
+ *
+ * @param {string[]} urls
+ * @param {Iterable<string>} [seenUrls]
+ */
+export function unseenBackgroundUrls(urls, seenUrls = []) {
+  const seen = new Set(seenUrls);
+  const queued = new Set();
+  const unseen = [];
+
+  for (const url of urls || []) {
+    if (!url || seen.has(url) || queued.has(url)) continue;
+    queued.add(url);
+    unseen.push(url);
+  }
+
+  return unseen;
+}
