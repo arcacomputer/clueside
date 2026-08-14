@@ -12,9 +12,10 @@
     "fetch-model": "node scripts/fetch-model.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "build": "node scripts/generate-icons.mjs && node scripts/build.mjs",
-    "test": "node --test tests/fuse.test.mjs tests/scoring.test.mjs tests/inference-policy.test.mjs tests/graphic-gate.test.mjs tests/eval-policy.test.mjs tests/calibration.test.mjs tests/heuristics.test.mjs tests/clip-preprocess.test.mjs tests/community-forensics.test.mjs tests/bytes.test.mjs tests/image-limits.test.mjs tests/analyze-retry.test.mjs tests/analyze-queue.test.mjs tests/store-listing.test.mjs tests/release-workflow.test.mjs tests/model-fetch.test.mjs tests/image-url.test.mjs tests/image-job.test.mjs tests/messages.test.mjs tests/overlay.test.mjs tests/update-checker.test.mjs tests/element-pixels.test.mjs tests/dino.test.mjs tests/walkthrough.test.mjs",
+    "test": "node --test tests/fuse.test.mjs tests/scoring.test.mjs tests/inference-policy.test.mjs tests/graphic-gate.test.mjs tests/eval-policy.test.mjs tests/calibration.test.mjs tests/heuristics.test.mjs tests/clip-preprocess.test.mjs tests/community-forensics.test.mjs tests/bytes.test.mjs tests/image-limits.test.mjs tests/analyze-retry.test.mjs tests/analyze-queue.test.mjs tests/store-listing.test.mjs tests/release-version.test.mjs tests/release-workflow.test.mjs tests/model-fetch.test.mjs tests/image-url.test.mjs tests/image-job.test.mjs tests/messages.test.mjs tests/overlay.test.mjs tests/update-checker.test.mjs tests/element-pixels.test.mjs tests/dino.test.mjs tests/walkthrough.test.mjs",
     "eval": "node eval/harness.mjs",
     "package": "node scripts/package.mjs",
+    "release:check-version": "node scripts/check-release-version.mjs",
     "site:check": "node scripts/check-site.mjs",
     "site:serve": "node scripts/serve-site.mjs"
   },

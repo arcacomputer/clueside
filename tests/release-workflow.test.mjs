@@ -11,6 +11,8 @@ describe('GitHub Release workflow', () => {
     const yml = await readFile(join(ROOT, '.github/workflows/release.yml'), 'utf8');
     assert.match(yml, /v\*\.\*\.\*/);
     assert.match(yml, /npm ci/);
+    assert.match(yml, /npm run release:check-version -- "\$GITHUB_REF_NAME"/);
+    assert.match(yml, /Verify release tag matches packaged version/);
     assert.match(yml, /npm test/);
     assert.match(yml, /npm run fetch-model/);
     assert.match(yml, /npm run package/);
