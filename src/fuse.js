@@ -5,16 +5,15 @@
 
 export const DEFAULT_THRESHOLD = 0.65;
 export const UNCERTAIN_LOW = 0.45;
+/** CF scores below this ignore DINO (Unsplash/IKEA reals stay ~0-37%). */
+export const DINO_CF_FLOOR = 0.40;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
- * Two independent neural heads cover complementary failure modes:
- * CommunityForensics (384 crops, near-zero false positives on real
- * photos) and the DINOv2 probe (global 224 view, carries modern
- * generators CF under-scores). Max is the honest combination for
- * "either detector fired"; measured on the local bench it lifts AI
- * recall massively while real-photo scores stay near zero on both
- * heads.
+ * CF-primary fusion: CommunityForensics stays authoritative when it is
+ * confident (real or AI). DINO only lifts scores in the uncertain band
+ * where CF is not already near zero, so saturated DINO on stock photos
+ * cannot override a low CF score.
  * @param {number} cfScore CommunityForensics p(AI) after TTA
  * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
  * @returns {number}
@@ -22,7 +21,12 @@ export const URL_HINT_MAX_BOOST = 0.05;
 export function fuseNeuralScores(cfScore, dinoScore) {
   const cf = clamp01(cfScore);
   if (dinoScore == null || Number.isNaN(dinoScore)) return cf;
-  return Math.max(cf, clamp01(dinoScore));
+  const dino = clamp01(dinoScore);
+
+  if (cf >= DEFAULT_THRESHOLD) return cf;
+  if (cf < DINO_CF_FLOOR) return cf;
+
+  return Math.max(cf, dino);
 }
 
 /**

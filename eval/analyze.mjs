@@ -120,6 +120,14 @@ const ENSEMBLE_POLICIES = {
     const cf = center < THRESHOLD && suspicious ? Math.max(...viewScores(rec)) : center;
     return Math.max(cf, d);
   },
+  'ens-cf-gated': (rec) => {
+    const d = dinoFor(rec);
+    const cf = adaptiveScore(rec, 0.02, Math.max);
+    if (d == null) return cf;
+    if (cf >= THRESHOLD) return cf;
+    if (cf < 0.40) return cf;
+    return Math.max(cf, d);
+  },
 };
 
 function adaptiveScore(rec, lo, _agg) {

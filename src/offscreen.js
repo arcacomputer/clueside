@@ -236,19 +236,16 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
     const bitmap = await createImageBitmap(blob);
     try {
       // DINO head first: one cheap 224 pass that carries the modern
-      // generators CF under-scores. If it is already confident, CF's
-      // extra TTA crops cannot change the decision (fusion is max).
+      // generators CF under-scores. Fusion is CF-primary, so a saturated
+      // DINO cannot override a near-zero CF; CF TTA still runs when DINO
+      // is mildly suspicious to rescue photoreal misses.
       const dinoPAi = await dinoScore(bitmap);
-      const dinoDecided = dinoPAi != null && dinoPAi >= activeThreshold;
 
       let cfPAi;
-      if (mode === 'center' || dinoDecided) {
+      if (mode === 'center') {
         const chw = await preprocessBitmap(bitmap);
         cfPAi = await predictCHW(activeSession, chw);
       } else {
-        // A suspicious dino score widens CF's TTA band to [0, t): CF
-        // corner/512 crops rescue photoreal cases whose center crop
-        // scores near zero, but only run when some head saw something.
         const views = await preprocessBitmapViews(bitmap);
         const dinoSuspicious = dinoPAi != null && dinoPAi >= TTA_ADAPTIVE_LOW;
         const effectiveMode = mode === 'adaptive' && dinoSuspicious ? 'always' : mode;

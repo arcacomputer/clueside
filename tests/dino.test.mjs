@@ -68,9 +68,19 @@ describe('dinoPackedRgbToCHW', () => {
 });
 
 describe('fuseNeuralScores', () => {
-  it('takes the max of both heads', () => {
-    assert.equal(fuseNeuralScores(0.2, 0.9), 0.9);
+  it('trusts CF when it is already confident AI', () => {
     assert.equal(fuseNeuralScores(0.8, 0.1), 0.8);
+    assert.equal(fuseNeuralScores(0.7, 0.99), 0.7);
+  });
+
+  it('does not let saturated DINO override a near-zero CF', () => {
+    assert.equal(fuseNeuralScores(0.02, 0.99), 0.02);
+    assert.equal(fuseNeuralScores(0.37, 1), 0.37);
+  });
+
+  it('lets DINO lift uncertain CF scores', () => {
+    assert.equal(fuseNeuralScores(0.5, 0.9), 0.9);
+    assert.equal(fuseNeuralScores(0.55, 0.7), 0.7);
   });
 
   it('falls back to CF when dino head is unavailable', () => {
@@ -80,6 +90,6 @@ describe('fuseNeuralScores', () => {
 
   it('clamps out-of-range scores', () => {
     assert.equal(fuseNeuralScores(1.5, -0.5), 1);
-    assert.equal(fuseNeuralScores(-1, 0.5), 0.5);
+    assert.equal(fuseNeuralScores(-1, 0.5), 0);
   });
 });

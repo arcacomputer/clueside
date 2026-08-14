@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fuseScores,
+  fuseNeuralScores,
   isAiAtThreshold,
   DEFAULT_THRESHOLD,
+  DINO_CF_FLOOR,
   URL_HINT_MAX_BOOST,
 } from '../src/fuse.js';
 
@@ -24,6 +26,33 @@ const urlSignals = {
   urlHintReason: 'URL suggests Midjourney CDN',
   reasons: ['URL suggests Midjourney CDN'],
 };
+
+describe('fuseNeuralScores policy', () => {
+  it('CF high + DINO low still calls AI when CF alone is >= 0.65', () => {
+    const fused = fuseNeuralScores(0.72, 0.12);
+    assert.equal(fused, 0.72);
+    assert.equal(isAiAtThreshold(fused), true);
+  });
+
+  it('CF near zero + DINO near one does not become AI 100%', () => {
+    const fused = fuseNeuralScores(0.03, 0.99);
+    assert.equal(fused, 0.03);
+    assert.equal(isAiAtThreshold(fused), false);
+  });
+
+  it('CF in uncertain band can be lifted by DINO', () => {
+    const fused = fuseNeuralScores(0.52, 0.88);
+    assert.equal(fused, 0.88);
+    assert.equal(isAiAtThreshold(fused), true);
+  });
+
+  it('CF below DINO floor ignores DINO even when high', () => {
+    assert.ok(DINO_CF_FLOOR > 0.37);
+    const fused = fuseNeuralScores(0.37, 0.99);
+    assert.equal(fused, 0.37);
+    assert.equal(isAiAtThreshold(fused), false);
+  });
+});
 
 describe('fuseScores', () => {
   it('C2PA forces AI verdict', () => {
