@@ -2,7 +2,7 @@
 
 **The clues stay on your side.** Clueside is a local Manifest V3 Chrome extension that estimates whether images on the web (or files you drop in) were likely created with AI. Inference runs in your browser with WebGPU or WASM using two complementary local models (CommunityForensics ViT + a DINOv2 feature probe). Eligible page-image URLs may be fetched for local decoding, but image bytes are never sent to Clueside or an inference backend. The extension never downloads models or inference assets at runtime. Its only outbound request unrelated to page images is an optional once-a-day GitHub version check for the update banner, which sends no image data and fails silently offline.
 
-The product website lives in [`site/`](site/) and deploys independently from the extension. Preview it with `npm run site:serve` and validate it with `npm run site:check`.
+The Astro product website lives in [`site/`](site/) and deploys independently to Cloudflare Workers Static Assets. Install its isolated dependencies with `npm ci --prefix site`, start it with `npm run site:dev`, and validate the production build with `npm run site:check`.
 
 **Author:** Luis Felipe Abarca  
 **License:** Original project code is MIT. Bundled model and runtime licenses

@@ -1,0 +1,23 @@
+{
+  "name": "@arcacomputer/clueside-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "check": "astro check && astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "deploy": "npm run build && wrangler deploy --config ../wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^7.2.2",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.123.0"
+  }
+}

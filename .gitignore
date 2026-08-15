@@ -10,3 +10,5 @@ release/
 *.log
 .env
 .vercel/
+.wrangler/
+site/.astro/

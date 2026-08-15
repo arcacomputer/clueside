@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Page not found | Clueside"
+  description="This Clueside page does not exist."
+  canonical="https://clueside.com/404"
+  noindex={true}
+>
+  <main class="not-found" id="main">
+    <img src="/assets/mark.svg" alt="" width="56" height="56" />
+    <p class="kicker">404 / clue missing</p>
+    <h1>Nothing to inspect here.</h1>
+    <p>The page may have moved, but your images still stayed on your side.</p>
+    <a class="button button-signal" href="/">Return home</a>
+  </main>
+</BaseLayout>

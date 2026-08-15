@@ -1,25 +1,15 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Clueside surfaces local AI-image signals as you browse. Eligible images are analyzed inside Chrome. No image uploads, inference API, or backend.">
-  <meta name="theme-color" content="#f4f0e7">
-  <meta property="og:title" content="Clueside | The clues stay on your side">
-  <meta property="og:description" content="Private, browser-local AI-image signals. Look twice. Upload nothing.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://clueside.com/">
-  <meta name="twitter:card" content="summary">
-  <link rel="canonical" href="https://clueside.com/">
-  <title>Clueside | Local AI-image signals for your browser</title>
-  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Clueside | Local AI-image signals for your browser"
+  description="Clueside surfaces local AI-image signals as you browse. Eligible images are analyzed inside Chrome. No image uploads, inference API, or backend."
+>
+<a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Clueside home">
-      <img src="assets/mark.svg" alt="" width="32" height="32">
+      <img src="/assets/mark.svg" alt="" width="32" height="32">
       <span>clueside</span>
     </a>
     <nav aria-label="Primary navigation">
@@ -89,7 +79,7 @@
     </section>
 
     <section class="marquee" aria-label="Product principles">
-      <div>NO CLOUD INFERENCE <span>◆</span> NO IMAGE API <span>◆</span> NO LOCAL SERVER <span>◆</span> WEBGPU + WASM <span>◆</span> FULLY REPRODUCIBLE</div>
+      <div>NO CLOUD INFERENCE <span>◆</span> NO IMAGE API <span>◆</span> NO LOCAL SERVER <span>◆</span> WEBGPU + WASM <span>◆</span> PUBLIC BUILD STEPS</div>
     </section>
 
     <section class="section process" id="how">
@@ -124,7 +114,7 @@
           <span class="step">04</span>
           <div class="step-icon badge-stack" aria-hidden="true"><i>AI</i><i>OK</i><i>?</i></div>
           <h3>Mark</h3>
-          <p>Every readable image gets a raw confidence score and a plain signal.</p>
+          <p>Each eligible, successfully analyzed image gets a raw confidence score and a plain signal.</p>
         </article>
       </div>
     </section>
@@ -172,7 +162,7 @@
       <div class="privacy-boundary">
         <span class="boundary-label">YOUR BROWSER</span>
         <div class="boundary-core">
-          <img src="assets/mark.svg" alt="" width="56" height="56">
+          <img src="/assets/mark.svg" alt="" width="56" height="56">
           <div><strong>Image pixels</strong><small>decoded locally</small></div>
           <span>+</span>
           <div><strong>Model weights</strong><small>bundled locally</small></div>
@@ -222,10 +212,9 @@
   </main>
 
   <footer class="site-footer">
-    <a class="brand" href="#top"><img src="assets/mark.svg" alt="" width="28" height="28"><span>clueside</span></a>
+    <a class="brand" href="#top"><img src="/assets/mark.svg" alt="" width="28" height="28"><span>clueside</span></a>
     <p>Images never leave your device.</p>
     <div><a href="https://github.com/arcacomputer/clueside">Source</a><a href="https://github.com/arcacomputer/clueside/blob/main/LICENSE">MIT License</a><span>© <span data-year></span> Luis Felipe Abarca</span></div>
   </footer>
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+  <script is:inline type="module" src="/app.js"></script>
+</BaseLayout>

@@ -1,0 +1,27 @@
+{
+  "$schema": "./site/node_modules/wrangler/config-schema.json",
+  "name": "clueside",
+  "workers_dev": false,
+  "preview_urls": false,
+  "main": "./site/worker.js",
+  "compatibility_date": "2026-08-15",
+  "assets": {
+    "directory": "./site/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  },
+  "routes": [
+    {
+      "pattern": "clueside.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.clueside.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
