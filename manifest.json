@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Clueside: Local AI Image Detector",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Clueside surfaces likely AI-generated images locally. Images never leave your device.",
   "author": "Luis Felipe Abarca",
   "icons": {
