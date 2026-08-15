@@ -22,11 +22,12 @@ Clueside estimates whether images on web pages (or files you drop in the popup) 
 How it works
 - Two local neural heads: CommunityForensics DeepfakeDet-ViT (MIT, FP32 ONNX)
   plus a DINOv2-small feature probe (transparent logistic head). Fusion is
-  CF-primary: CommunityForensics wins below 40% and at or above 65%; DINO may
-  lift only inside that band. A flat-graphic guard prevents DINO from
-  overriding CF on catalog art and UI-like images. CommunityForensics TTA uses
-  the maximum raw sigmoid from inspected crops. The decision threshold is raw
-  65% p(AI), with no score remapping.
+  CF-primary: CommunityForensics wins below a 5% rescue floor and at or above
+  65%; between 5% and 40% DINO may only lift if it is near-saturated (>= 98%);
+  between 40% and 65% DINO may lift at >= 70%. A flat-graphic guard prevents
+  DINO from overriding CF on catalog art and UI-like images. CommunityForensics
+  TTA uses the maximum raw sigmoid from inspected crops. The decision threshold
+  is raw 65% p(AI), with no score remapping.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
 - Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 
