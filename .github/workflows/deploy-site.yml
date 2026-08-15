@@ -1,0 +1,62 @@
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "scripts/check-site.mjs"
+      - "tests/site-astro.test.mjs"
+      - "tests/site-worker.test.mjs"
+      - ".github/workflows/deploy-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clueside-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install website dependencies
+        run: npm ci --prefix site
+
+      - name: Check and build Astro site
+        run: npm run site:check
+
+      - name: Upload immutable Worker version
+        run: >-
+          ./site/node_modules/.bin/wrangler versions upload
+          --config wrangler.jsonc
+          --tag "$GITHUB_SHA"
+          --message "GitHub $GITHUB_SHA"
+
+      - name: Deploy version to production
+        run: >-
+          ./site/node_modules/.bin/wrangler versions deploy
+          --config wrangler.jsonc
+          --version-tag "$GITHUB_SHA"
+          --percentage 100
+          --yes
+          --message "GitHub $GITHUB_SHA"

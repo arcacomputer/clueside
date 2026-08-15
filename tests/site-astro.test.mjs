@@ -58,6 +58,23 @@ describe('Astro website boundary', () => {
     ]);
   });
 
+  it('deploys site versions without resyncing already-configured custom domains', async () => {
+    const workflow = await read('.github/workflows/deploy-site.yml');
+    assert.match(workflow, /wrangler versions upload/);
+    assert.match(workflow, /wrangler versions deploy/);
+    assert.match(workflow, /--version-tag/);
+    assert.doesNotMatch(workflow, /wrangler deploy --config/);
+    assert.match(workflow, /secrets\.CLOUDFLARE_API_TOKEN/);
+    assert.match(workflow, /secrets\.CLOUDFLARE_ACCOUNT_ID/);
+
+    const rootPackage = JSON.parse(await read('package.json'));
+    assert.equal(rootPackage.scripts['site:deploy'], 'node scripts/deploy-site.mjs');
+    const deployScript = await read('scripts/deploy-site.mjs');
+    assert.match(deployScript, /versions', 'upload/);
+    assert.match(deployScript, /versions',\s*'deploy/);
+    assert.doesNotMatch(deployScript, /CLOUDFLARE_API_TOKEN\s*=/);
+  });
+
   it('keeps extension packaging independent from site output', async () => {
     const packaging = await read('scripts/package.mjs');
     assert.doesNotMatch(packaging, /site\/dist/);

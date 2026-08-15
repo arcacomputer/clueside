@@ -13,6 +13,18 @@ describe('Clueside hostname worker', () => {
     assert.equal(response.headers.get('location'), 'https://clueside.com/evidence?from=www');
   });
 
+  it('redirects production HTTP requests to the HTTPS apex', async () => {
+    for (const hostname of ['clueside.com', 'www.clueside.com']) {
+      const response = await worker.fetch(
+        new Request(`http://${hostname}/evidence?source=browser`),
+        { ASSETS: { fetch: () => assert.fail('redirect must not read assets') } }
+      );
+
+      assert.equal(response.status, 308);
+      assert.equal(response.headers.get('location'), 'https://clueside.com/evidence?source=browser');
+    }
+  });
+
   it('serves apex requests from the static asset binding', async () => {
     const request = new Request('https://clueside.com/');
     let delegated;

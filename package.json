@@ -20,7 +20,8 @@
     "site:build": "npm --prefix site run build",
     "site:check": "npm --prefix site run check && node scripts/check-site.mjs",
     "site:serve": "npm --prefix site run preview",
-    "site:deploy": "npm --prefix site run deploy"
+    "site:deploy": "node scripts/deploy-site.mjs",
+    "site:deploy:triggers": "npm --prefix site run deploy"
   },
   "dependencies": {
     "@contentauth/c2pa-web": "^0.13.4",

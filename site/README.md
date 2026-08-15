@@ -36,7 +36,15 @@ The production target is Cloudflare Workers with Static Assets. Configuration li
 npm run site:deploy
 ```
 
-The tiny Worker serves the Astro build and redirects `www.clueside.com` to the canonical apex domain. Cloudflare credentials stay outside the repository.
+Routine deployments upload an immutable Worker version and move production traffic to it without reconfiguring DNS or custom-domain triggers. Pushes to `main` that change website or Worker files use the same versioned flow through GitHub Actions.
+
+The initial custom-domain setup, or a deliberate trigger change, requires the wider zone-routing permission and uses:
+
+```bash
+npm run site:deploy:triggers
+```
+
+The tiny Worker serves the Astro build, forces production HTTP traffic onto HTTPS, and redirects `www.clueside.com` to the canonical apex domain. Cloudflare credentials stay outside the repository.
 
 ## License
 
