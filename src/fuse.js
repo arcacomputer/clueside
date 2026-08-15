@@ -5,21 +5,34 @@
 
 export const DEFAULT_THRESHOLD = 0.65;
 export const UNCERTAIN_LOW = 0.45;
-/** CF scores below this ignore DINO entirely (real photos often have near-zero CF). */
-export const DINO_CF_FLOOR = 0.05;
+/** CF scores below this need the saturated sub-floor tier to be rescued. */
+export const DINO_CF_FLOOR = 0.03;
 /** CF below this requires near-saturated DINO before it can be rescued. */
-export const DINO_STRONG_RESCUE_FLOOR = 0.40;
+export const DINO_STRONG_RESCUE_FLOOR = 0.30;
 /** DINO must be this confident to lift a low CF score into the rescue band. */
-export const DINO_STRONG_RESCUE_MIN = 0.98;
+export const DINO_STRONG_RESCUE_MIN = 0.96;
 /** DINO must be this confident to lift CF in the normal uncertain band. */
 export const DINO_RESCUE_MIN = 0.70;
+/**
+ * Sub-floor tier: below DINO_CF_FLOOR, rescue only when CF is at least
+ * faintly awake AND DINO is saturated. CF emits hard zeros on real photos
+ * it is certain about, while AI images in its blind spots still elicit a
+ * faint response, so "CF flatlined" is itself evidence of a real photo.
+ * Derived on the Pillow-path bench with a 240-image stock/catalog stress
+ * guard (zero stress regression allowed); see PR for the measurement.
+ */
+export const DINO_SUBFLOOR_CF_MIN = 0.005;
+/** DINO saturation required for the sub-floor rescue. */
+export const DINO_SUBFLOOR_MIN = 0.999;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
  * CF-primary fusion: CommunityForensics stays authoritative when it is
- * confident (real or AI). DINO only lifts scores in the uncertain band
- * where CF is not already near zero, so saturated DINO on stock photos
- * cannot override a low CF score.
+ * confident (real or AI). DINO only lifts scores where CF is not already
+ * near zero, so saturated DINO on stock photos cannot override a
+ * confident-real CF score. Below the CF floor a rescue additionally
+ * requires CF to be faintly awake (>= DINO_SUBFLOOR_CF_MIN) and DINO to
+ * be saturated (>= DINO_SUBFLOOR_MIN).
  * @param {number} cfScore CommunityForensics p(AI) after TTA
  * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
  * @param {{ graphicGate?: boolean }} [options]
@@ -31,9 +44,15 @@ export function fuseNeuralScores(cfScore, dinoScore, options = {}) {
   const dino = clamp01(dinoScore);
 
   if (cf >= DEFAULT_THRESHOLD) return cf;
-  if (cf < DINO_CF_FLOOR) return cf;
 
   if (options.graphicGate) return cf;
+
+  if (cf < DINO_CF_FLOOR) {
+    if (cf >= DINO_SUBFLOOR_CF_MIN && dino >= DINO_SUBFLOOR_MIN) {
+      return Math.max(cf, dino);
+    }
+    return cf;
+  }
 
   // Below the safe band, DINO must be near-saturated to avoid overriding
   // real photos on which CF is only weakly confident.

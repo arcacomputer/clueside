@@ -5,6 +5,12 @@ import {
   SHORTEST_EDGE,
   TTA_EXTRA_SHORTEST_EDGE,
 } from './models.js';
+import { pillowResize } from './pixel-resize.js';
+import { MAX_CANVAS_SIDE, MAX_IMAGE_PIXELS } from './image-limits.js';
+
+// NOTE: src/dino.js keeps its own canvas / RawImage resize path on purpose;
+// the DINO probe was trained against it and changing it without retraining
+// adds skew. Only the CommunityForensics path below uses pillowResize.
 
 /**
  * @param {number} width
@@ -138,25 +144,119 @@ export function imageDataToCHW(imageData) {
   return packedRgbToCHW(data, 4);
 }
 
-function cropCanvas(sourceCanvas, sx, sy) {
-  const crop = new OffscreenCanvas(CROP_SIZE, CROP_SIZE);
-  const cropCtx = crop.getContext('2d', { willReadFrequently: true });
-  // 1:1 blit; smoothing settings are irrelevant here but harmless.
-  cropCtx.drawImage(sourceCanvas, sx, sy, CROP_SIZE, CROP_SIZE, 0, 0, CROP_SIZE, CROP_SIZE);
-  return imageDataToCHW(cropCtx.getImageData(0, 0, CROP_SIZE, CROP_SIZE));
+/**
+ * Copy a CROP_SIZE window out of a packed row-major pixel buffer.
+ * @param {Uint8Array|Uint8ClampedArray} data width * height * channels
+ * @param {number} width
+ * @param {number} height
+ * @param {number} channels
+ * @param {number} sx
+ * @param {number} sy
+ * @returns {Uint8ClampedArray} CROP_SIZE * CROP_SIZE * channels
+ */
+export function cropPackedPixels(data, width, height, channels, sx, sy) {
+  if (sx < 0 || sy < 0 || sx + CROP_SIZE > width || sy + CROP_SIZE > height) {
+    throw new Error(
+      `Crop ${CROP_SIZE} at ${sx},${sy} does not fit inside ${width}x${height}`
+    );
+  }
+
+  const rowLength = CROP_SIZE * channels;
+  const out = new Uint8ClampedArray(CROP_SIZE * rowLength);
+  for (let y = 0; y < CROP_SIZE; y++) {
+    const start = ((sy + y) * width + sx) * channels;
+    out.set(data.subarray(start, start + rowLength), y * rowLength);
+  }
+  return out;
 }
 
-function resizeBitmapCanvas(bitmap, resizedW, resizedH) {
-  const resizeCanvas = new OffscreenCanvas(resizedW, resizedH);
-  const resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
-  // The model was trained on PIL bicubic (resample=3). Chrome's default
-  // imageSmoothingQuality 'low' is bilinear and visibly changes the
-  // texture statistics CommunityForensics keys on; 'high' is the
-  // closest canvas filter to the training-time resize.
-  resizeCtx.imageSmoothingEnabled = true;
-  resizeCtx.imageSmoothingQuality = 'high';
-  resizeCtx.drawImage(bitmap, 0, 0, resizedW, resizedH);
-  return resizeCanvas;
+/**
+ * Shared CF view builder: Pillow-exact resize once per target size, then
+ * typed-array window crops. Identical for browser RGBA and Node RawImage
+ * pixels, which is the whole point of the pillowResize migration.
+ * @param {Uint8Array|Uint8ClampedArray} data
+ * @param {number} width
+ * @param {number} height
+ * @param {number} channels
+ * @param {Array<{name: string, sx: number, sy: number, resizedW: number, resizedH: number}>} plan
+ * @returns {Array<{name: string, chw: Float32Array}>}
+ */
+function packedPlanViews(data, width, height, channels, plan) {
+  const resizedByKey = new Map();
+  const views = [];
+
+  for (const step of plan) {
+    const key = `${step.resizedW}x${step.resizedH}`;
+    if (!resizedByKey.has(key)) {
+      resizedByKey.set(
+        key,
+        pillowResize(data, width, height, channels, step.resizedW, step.resizedH)
+      );
+    }
+    const crop = cropPackedPixels(
+      resizedByKey.get(key),
+      step.resizedW,
+      step.resizedH,
+      channels,
+      step.sx,
+      step.sy
+    );
+    views.push({ name: step.name, chw: packedRgbToCHW(crop, channels) });
+  }
+
+  return views;
+}
+
+/**
+ * True when a bitmap is too large to read back at native size: over the
+ * decoded-pixel cap, or with a side beyond Chrome's canvas limit (where
+ * getImageData silently returns transparent black). Exported for tests.
+ * @param {number} width
+ * @param {number} height
+ */
+export function needsCanvasFallback(width, height) {
+  return (
+    width * height > MAX_IMAGE_PIXELS ||
+    width > MAX_CANVAS_SIDE ||
+    height > MAX_CANVAS_SIDE
+  );
+}
+
+/**
+ * Read the full native-size RGBA pixels of a decoded bitmap exactly once.
+ * Callers must check needsCanvasFallback first.
+ * @param {ImageBitmap} bitmap
+ * @returns {Uint8ClampedArray} bitmap.width * bitmap.height * 4
+ */
+function bitmapToPackedRgba(bitmap) {
+  const { width, height } = bitmap;
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  // 1:1 blit at native size; no canvas resampling is involved in the CF
+  // path for in-cap bitmaps. The model was trained on PIL bicubic, and
+  // pillowResize reproduces it byte for byte in both browser and Node.
+  ctx.drawImage(bitmap, 0, 0);
+  return ctx.getImageData(0, 0, width, height).data;
+}
+
+/**
+ * Legacy canvas resize, kept only for bitmaps that cannot be read back at
+ * native size (see needsCanvasFallback). This is exactly the pre-Pillow
+ * shipped behavior: GPU drawImage with high smoothing straight to the
+ * target dims, so monster images keep scoring instead of erroring. The
+ * target canvas is always small, far below every canvas limit.
+ * @param {ImageBitmap} bitmap
+ * @param {number} resizedW
+ * @param {number} resizedH
+ * @returns {Uint8ClampedArray} resizedW * resizedH * 4
+ */
+function fallbackCanvasResize(bitmap, resizedW, resizedH) {
+  const canvas = new OffscreenCanvas(resizedW, resizedH);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, resizedW, resizedH);
+  return ctx.getImageData(0, 0, resizedW, resizedH).data;
 }
 
 /**
@@ -166,21 +266,30 @@ function resizeBitmapCanvas(bitmap, resizedW, resizedH) {
  */
 export async function preprocessBitmapViews(bitmap) {
   const plan = ttaViewPlan(bitmap.width, bitmap.height);
-  const canvases = new Map();
-  const views = [];
 
-  for (const step of plan) {
-    const key = `${step.resizedW}x${step.resizedH}`;
-    if (!canvases.has(key)) {
-      canvases.set(key, resizeBitmapCanvas(bitmap, step.resizedW, step.resizedH));
+  if (needsCanvasFallback(bitmap.width, bitmap.height)) {
+    const resizedByKey = new Map();
+    const views = [];
+    for (const step of plan) {
+      const key = `${step.resizedW}x${step.resizedH}`;
+      if (!resizedByKey.has(key)) {
+        resizedByKey.set(key, fallbackCanvasResize(bitmap, step.resizedW, step.resizedH));
+      }
+      const crop = cropPackedPixels(
+        resizedByKey.get(key),
+        step.resizedW,
+        step.resizedH,
+        4,
+        step.sx,
+        step.sy
+      );
+      views.push({ name: step.name, chw: packedRgbToCHW(crop, 4) });
     }
-    views.push({
-      name: step.name,
-      chw: cropCanvas(canvases.get(key), step.sx, step.sy),
-    });
+    return views;
   }
 
-  return views;
+  const rgba = bitmapToPackedRgba(bitmap);
+  return packedPlanViews(rgba, bitmap.width, bitmap.height, 4, plan);
 }
 
 /**
@@ -190,52 +299,63 @@ export async function preprocessBitmapViews(bitmap) {
  */
 export async function preprocessBitmap(bitmap) {
   const { width: resizedW, height: resizedH } = resizeDimensions(bitmap.width, bitmap.height);
-  const canvas = resizeBitmapCanvas(bitmap, resizedW, resizedH);
   const origin = cropOrigins(resizedW, resizedH)[0];
-  return cropCanvas(canvas, origin.sx, origin.sy);
-}
 
-async function cropRawRgb(rawImage, sx, sy) {
-  const cropped = await rawImage.crop([sx, sy, sx + CROP_SIZE - 1, sy + CROP_SIZE - 1]);
-  if (cropped.width !== CROP_SIZE || cropped.height !== CROP_SIZE) {
-    throw new Error(`Crop produced ${cropped.width}x${cropped.height}, expected ${CROP_SIZE}`);
+  if (needsCanvasFallback(bitmap.width, bitmap.height)) {
+    const resized = fallbackCanvasResize(bitmap, resizedW, resizedH);
+    const crop = cropPackedPixels(resized, resizedW, resizedH, 4, origin.sx, origin.sy);
+    return packedRgbToCHW(crop, 4);
   }
-  return packedRgbToCHW(cropped.data, cropped.channels);
+
+  const rgba = bitmapToPackedRgba(bitmap);
+  const resized = pillowResize(rgba, bitmap.width, bitmap.height, 4, resizedW, resizedH);
+  const crop = cropPackedPixels(resized, resizedW, resizedH, 4, origin.sx, origin.sy);
+  return packedRgbToCHW(crop, 4);
 }
 
 /**
- * Node eval path: CLIP views matching the extension.
+ * Node eval path: CLIP views matching the extension. Feeds the raw packed
+ * pixels straight into the same pillowResize the browser path uses.
+ * Grayscale sources (channels < 3) flow through unchanged; packedRgbToCHW
+ * replicates the single channel instead of reading past the pixel.
  * @param {import('@huggingface/transformers').RawImage} rawImage
  * @returns {Promise<Array<{name: string, chw: Float32Array}>>}
  */
 export async function preprocessRawImageViews(rawImage) {
   const plan = ttaViewPlan(rawImage.width, rawImage.height);
-  const resizedByKey = new Map();
-  const views = [];
-
-  for (const step of plan) {
-    const key = `${step.resizedW}x${step.resizedH}`;
-    if (!resizedByKey.has(key)) {
-      resizedByKey.set(key, await rawImage.resize(step.resizedW, step.resizedH));
-    }
-    const resized = resizedByKey.get(key);
-    views.push({
-      name: step.name,
-      chw: await cropRawRgb(resized, step.sx, step.sy),
-    });
-  }
-
-  return views;
+  return packedPlanViews(
+    rawImage.data,
+    rawImage.width,
+    rawImage.height,
+    rawImage.channels,
+    plan
+  );
 }
 
 /**
- * Node eval path using transformers.js RawImage helpers (official center crop).
+ * Node eval path (official center crop), same pixels-in pixels-out route
+ * as preprocessRawImageViews.
  * @param {import('@huggingface/transformers').RawImage} rawImage
  * @returns {Promise<Float32Array>}
  */
 export async function preprocessRawImage(rawImage) {
   const { width: resizedW, height: resizedH } = resizeDimensions(rawImage.width, rawImage.height);
-  const resized = await rawImage.resize(resizedW, resizedH);
+  const resized = pillowResize(
+    rawImage.data,
+    rawImage.width,
+    rawImage.height,
+    rawImage.channels,
+    resizedW,
+    resizedH
+  );
   const origin = cropOrigins(resizedW, resizedH)[0];
-  return cropRawRgb(resized, origin.sx, origin.sy);
+  const crop = cropPackedPixels(
+    resized,
+    resizedW,
+    resizedH,
+    rawImage.channels,
+    origin.sx,
+    origin.sy
+  );
+  return packedRgbToCHW(crop, rawImage.channels);
 }

@@ -2,6 +2,25 @@ export const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 export const MAX_IMAGE_BASE64_CHARS = 4 * Math.ceil(MAX_IMAGE_BYTES / 3);
 
 /**
+ * Decoded-pixel cap for the CF preprocess, which reads the full native
+ * bitmap once (getImageData) before the Pillow-exact resize. The 12 MiB
+ * encoded cap does not bound decoded size: a dense JPEG can decode far
+ * larger than its byte count suggests. 64 MiPixels is 256 MiB of RGBA.
+ * Bitmaps above this cap fall back to the legacy canvas resize instead of
+ * erroring, so oversized images keep scoring like they did before the
+ * Pillow-exact path landed.
+ */
+export const MAX_IMAGE_PIXELS = 64 * 1024 * 1024;
+
+/**
+ * Chrome caps a canvas side at 65,535 device pixels; a native-size canvas
+ * beyond that silently reads back transparent black. Any bitmap with a
+ * longer side must use the legacy canvas fallback, which only ever
+ * allocates the small resized target.
+ */
+export const MAX_CANVAS_SIDE = 65535;
+
+/**
  * Read a fetch response without allowing a missing or dishonest
  * Content-Length header to allocate an unbounded image buffer.
  * @param {Response} response
