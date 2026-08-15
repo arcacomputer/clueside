@@ -2,7 +2,7 @@
 
 **Author:** Luis Felipe Abarca  
 **Project license:** MIT (bundled assets have their own notices)
-**Version:** 1.0.9
+**Version:** 1.1.0
 
 Unpacked install from GitHub (`npm run fetch-model && npm run build`, then Load unpacked from `dist/`) remains the POIDH proof path. This file is listing copy for a future Chrome Web Store upload. The extension is **not** claimed to be on the Chrome Web Store.
 
