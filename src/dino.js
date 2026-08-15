@@ -10,6 +10,9 @@
  * shortest edge 256, center crop 224, ImageNet mean/std.
  */
 
+import { pillowResize } from './pixel-resize.js';
+import { cropPackedPixels, needsCanvasFallback } from './clip-preprocess.js';
+
 export const DINO_MODEL_ID = 'Xenova/dinov2-small';
 export const DINO_ONNX_PATH = 'onnx/model.onnx';
 export const DINO_SHORTEST_EDGE = 256;
@@ -61,9 +64,10 @@ export function dinoPackedRgbToCHW(data, channels) {
 }
 
 /**
- * Node eval path using transformers.js RawImage helpers. Keeping this beside
- * the browser preprocessor makes the extension and reproducible harness share
- * the same resize, center-crop, channel, and normalization policy.
+ * Node eval path. Shares the Pillow-exact resize with the browser path so
+ * the extension, the harness, and probe training all compute identical
+ * DINO inputs. The probe head shipped with this revision is trained on
+ * features extracted through this exact path.
  * @param {import('@huggingface/transformers').RawImage} rawImage
  * @returns {Promise<Float32Array>}
  */
@@ -72,45 +76,58 @@ export async function dinoPreprocessRawImage(rawImage) {
     rawImage.width,
     rawImage.height
   );
-  const resized = await rawImage.resize(resizedW, resizedH);
+  const resized = pillowResize(
+    rawImage.data,
+    rawImage.width,
+    rawImage.height,
+    rawImage.channels,
+    resizedW,
+    resizedH
+  );
   const sx = Math.floor((resizedW - DINO_CROP_SIZE) / 2);
   const sy = Math.floor((resizedH - DINO_CROP_SIZE) / 2);
-  const cropped = await resized.crop([
+  const crop = cropPackedPixels(
+    resized,
+    resizedW,
+    resizedH,
+    rawImage.channels,
     sx,
     sy,
-    sx + DINO_CROP_SIZE - 1,
-    sy + DINO_CROP_SIZE - 1,
-  ]);
-
-  if (cropped.width !== DINO_CROP_SIZE || cropped.height !== DINO_CROP_SIZE) {
-    throw new Error(
-      `DINO crop produced ${cropped.width}x${cropped.height}, expected ${DINO_CROP_SIZE}`
-    );
-  }
-
-  return dinoPackedRgbToCHW(cropped.data, cropped.channels);
+    DINO_CROP_SIZE
+  );
+  return dinoPackedRgbToCHW(crop, rawImage.channels);
 }
 
 /**
- * Browser path: center 224 crop from an ImageBitmap.
+ * Browser path: center 224 crop from an ImageBitmap through the same
+ * Pillow-exact resize as the Node path. Oversized bitmaps fall back to
+ * the legacy canvas resize (same guard as the CF path).
  * @param {ImageBitmap} bitmap
  * @returns {Float32Array}
  */
 export function dinoPreprocessBitmap(bitmap) {
   const { width: rw, height: rh } = dinoResizeDimensions(bitmap.width, bitmap.height);
-  const resizeCanvas = new OffscreenCanvas(rw, rh);
-  const resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
-  resizeCtx.imageSmoothingEnabled = true;
-  resizeCtx.imageSmoothingQuality = 'high';
-  resizeCtx.drawImage(bitmap, 0, 0, rw, rh);
-
   const sx = Math.floor((rw - DINO_CROP_SIZE) / 2);
   const sy = Math.floor((rh - DINO_CROP_SIZE) / 2);
-  const crop = new OffscreenCanvas(DINO_CROP_SIZE, DINO_CROP_SIZE);
-  const cropCtx = crop.getContext('2d', { willReadFrequently: true });
-  cropCtx.drawImage(resizeCanvas, sx, sy, DINO_CROP_SIZE, DINO_CROP_SIZE, 0, 0, DINO_CROP_SIZE, DINO_CROP_SIZE);
-  const imageData = cropCtx.getImageData(0, 0, DINO_CROP_SIZE, DINO_CROP_SIZE);
-  return dinoPackedRgbToCHW(imageData.data, 4);
+
+  if (needsCanvasFallback(bitmap.width, bitmap.height)) {
+    const resizeCanvas = new OffscreenCanvas(rw, rh);
+    const resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
+    resizeCtx.imageSmoothingEnabled = true;
+    resizeCtx.imageSmoothingQuality = 'high';
+    resizeCtx.drawImage(bitmap, 0, 0, rw, rh);
+    const imageData = resizeCtx.getImageData(0, 0, rw, rh);
+    const crop = cropPackedPixels(imageData.data, rw, rh, 4, sx, sy, DINO_CROP_SIZE);
+    return dinoPackedRgbToCHW(crop, 4);
+  }
+
+  const nativeCanvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const nativeCtx = nativeCanvas.getContext('2d', { willReadFrequently: true });
+  nativeCtx.drawImage(bitmap, 0, 0);
+  const rgba = nativeCtx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+  const resized = pillowResize(rgba, bitmap.width, bitmap.height, 4, rw, rh);
+  const crop = cropPackedPixels(resized, rw, rh, 4, sx, sy, DINO_CROP_SIZE);
+  return dinoPackedRgbToCHW(crop, 4);
 }
 
 /**

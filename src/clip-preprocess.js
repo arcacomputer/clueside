@@ -145,25 +145,26 @@ export function imageDataToCHW(imageData) {
 }
 
 /**
- * Copy a CROP_SIZE window out of a packed row-major pixel buffer.
+ * Copy a square window out of a packed row-major pixel buffer.
  * @param {Uint8Array|Uint8ClampedArray} data width * height * channels
  * @param {number} width
  * @param {number} height
  * @param {number} channels
  * @param {number} sx
  * @param {number} sy
- * @returns {Uint8ClampedArray} CROP_SIZE * CROP_SIZE * channels
+ * @param {number} [cropSize] window side, defaults to the CF crop
+ * @returns {Uint8ClampedArray} cropSize * cropSize * channels
  */
-export function cropPackedPixels(data, width, height, channels, sx, sy) {
-  if (sx < 0 || sy < 0 || sx + CROP_SIZE > width || sy + CROP_SIZE > height) {
+export function cropPackedPixels(data, width, height, channels, sx, sy, cropSize = CROP_SIZE) {
+  if (sx < 0 || sy < 0 || sx + cropSize > width || sy + cropSize > height) {
     throw new Error(
-      `Crop ${CROP_SIZE} at ${sx},${sy} does not fit inside ${width}x${height}`
+      `Crop ${cropSize} at ${sx},${sy} does not fit inside ${width}x${height}`
     );
   }
 
-  const rowLength = CROP_SIZE * channels;
-  const out = new Uint8ClampedArray(CROP_SIZE * rowLength);
-  for (let y = 0; y < CROP_SIZE; y++) {
+  const rowLength = cropSize * channels;
+  const out = new Uint8ClampedArray(cropSize * rowLength);
+  for (let y = 0; y < cropSize; y++) {
     const start = ((sy + y) * width + sx) * channels;
     out.set(data.subarray(start, start + rowLength), y * rowLength);
   }
