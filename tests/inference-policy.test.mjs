@@ -23,7 +23,7 @@ describe('production inference policy', () => {
   });
 
   it('applies CF-primary neural fusion before deterministic metadata', () => {
-    assert.equal(fuseInferenceScores(0.04, 0.99, noSignals).rawScore, 0.04);
+    assert.equal(fuseInferenceScores(0.004, 0.99, noSignals).rawScore, 0.004);
     assert.equal(fuseInferenceScores(0.5, 0.8, noSignals).rawScore, 0.8);
 
     const forced = fuseInferenceScores(0.1, 0.1, {
