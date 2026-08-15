@@ -79,9 +79,11 @@ Output:
   `[0.15, 0.65)`. Production CF takes the maximum raw sigmoid from inspected
   views. Inference stops when any inspected crop reaches `>= 0.9`.
 - Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
-- Neural fusion: CF-primary. CF wins below `0.40` and at or above `0.65`; DINO
-  may lift only inside that band. The same native-pixel flat-graphic gate used
-  by the extension suppresses DINO lift on catalog art and UI-like images.
+- Neural fusion: CF-primary. CF wins below `0.05` and at or above `0.65`;
+  between `0.05` and `0.40` DINO may only lift when near-saturated (`>= 0.98`);
+  between `0.40` and `0.65` DINO may lift at `>= 0.70`. The same native-pixel
+  flat-graphic gate used by the extension suppresses DINO lift on catalog art
+  and UI-like images.
 - Final fusion: `src/inference-policy.js` is imported by the extension and both
   evaluators. Node uses the deterministic C2PA byte fallback; c2pa-web runs in
   the extension offscreen document.

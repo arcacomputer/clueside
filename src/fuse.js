@@ -5,8 +5,14 @@
 
 export const DEFAULT_THRESHOLD = 0.65;
 export const UNCERTAIN_LOW = 0.45;
-/** CF scores below this ignore DINO (Unsplash/IKEA reals stay ~0-37%). */
-export const DINO_CF_FLOOR = 0.40;
+/** CF scores below this ignore DINO entirely (real photos often have near-zero CF). */
+export const DINO_CF_FLOOR = 0.05;
+/** CF below this requires near-saturated DINO before it can be rescued. */
+export const DINO_STRONG_RESCUE_FLOOR = 0.40;
+/** DINO must be this confident to lift a low CF score into the rescue band. */
+export const DINO_STRONG_RESCUE_MIN = 0.98;
+/** DINO must be this confident to lift CF in the normal uncertain band. */
+export const DINO_RESCUE_MIN = 0.70;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
@@ -28,6 +34,11 @@ export function fuseNeuralScores(cfScore, dinoScore, options = {}) {
   if (cf < DINO_CF_FLOOR) return cf;
 
   if (options.graphicGate) return cf;
+
+  // Below the safe band, DINO must be near-saturated to avoid overriding
+  // real photos on which CF is only weakly confident.
+  if (cf < DINO_STRONG_RESCUE_FLOOR && dino < DINO_STRONG_RESCUE_MIN) return cf;
+  if (dino < DINO_RESCUE_MIN) return cf;
 
   return Math.max(cf, dino);
 }

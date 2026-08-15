@@ -6,6 +6,9 @@ import {
   isAiAtThreshold,
   DEFAULT_THRESHOLD,
   DINO_CF_FLOOR,
+  DINO_STRONG_RESCUE_FLOOR,
+  DINO_STRONG_RESCUE_MIN,
+  DINO_RESCUE_MIN,
   URL_HINT_MAX_BOOST,
 } from '../src/fuse.js';
 
@@ -46,15 +49,30 @@ describe('fuseNeuralScores policy', () => {
     assert.equal(isAiAtThreshold(fused), true);
   });
 
-  it('CF below DINO floor ignores DINO even when high', () => {
-    assert.equal(DINO_CF_FLOOR, 0.40);
-    const fused = fuseNeuralScores(0.399, 0.99);
-    assert.equal(fused, 0.399);
+  it('DINO below the rescue minimum does not lift CF in the rescue band', () => {
+    assert.equal(DINO_RESCUE_MIN, 0.70);
+    const fused = fuseNeuralScores(0.52, 0.66);
+    assert.equal(fused, 0.52);
     assert.equal(isAiAtThreshold(fused), false);
   });
 
+  it('CF below DINO floor ignores DINO even when high', () => {
+    assert.equal(DINO_CF_FLOOR, 0.05);
+    const fused = fuseNeuralScores(0.04, 0.99);
+    assert.equal(fused, 0.04);
+    assert.equal(isAiAtThreshold(fused), false);
+  });
+
+  it('low CF is only rescued by near-saturated DINO', () => {
+    assert.equal(DINO_STRONG_RESCUE_FLOOR, 0.40);
+    assert.equal(DINO_STRONG_RESCUE_MIN, 0.98);
+    assert.equal(fuseNeuralScores(0.35, 0.99), 0.99);
+    assert.equal(fuseNeuralScores(0.35, 0.97), 0.35);
+  });
+
   it('includes the DINO floor boundary in the lift band', () => {
-    assert.equal(fuseNeuralScores(DINO_CF_FLOOR, 0.91), 0.91);
+    assert.equal(fuseNeuralScores(DINO_CF_FLOOR, DINO_STRONG_RESCUE_MIN), DINO_STRONG_RESCUE_MIN);
+    assert.equal(fuseNeuralScores(DINO_STRONG_RESCUE_FLOOR, DINO_RESCUE_MIN), DINO_RESCUE_MIN);
   });
 
   it('graphic gate suppresses DINO lift in the uncertain band', () => {

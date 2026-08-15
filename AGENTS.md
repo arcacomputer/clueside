@@ -32,7 +32,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Manifest V3.** `onnxruntime-web` in an offscreen document. WebGPU with WASM fallback (probe the adapter; do not latch a WebGPU error).
 - **Auto-scan ordinary webpages.** Confidence on every badge: AI / OK / uncertain.
 - **Hybrid is allowed:** neural + C2PA + EXIF/XMP + PNG/JPEG comments + weak URL hints. A URL hint alone must not cross 0.65.
-- **Current fusion (v1.0.9): CF-primary.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative when CF >= 0.65 or CF < 0.40. DINO may only lift when CF is in [0.40, 0.65), and the flat-graphic gate suppresses that lift on catalog art and UI-like images. **Do not restore raw max(CF, DINO), lower the 0.40 floor, or remove the graphic gate without fresh public and live-site evidence.**
+- **Current fusion: CF-primary.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative when CF >= 0.65 or CF < 0.05. Between 0.05 and 0.40, DINO may only lift when it is near-saturated (>= 0.98). Between 0.40 and 0.65, DINO may lift at >= 0.70. The flat-graphic gate suppresses DINO lift on catalog art and UI-like images. **Do not restore raw max(CF, DINO) or remove the graphic gate without fresh public and live-site evidence.**
 - **Overlay:** badge store must be an iterable `Map`, not a `WeakMap`. Reposition on scroll / resize / `visualViewport` / mutations. Never wrap images.
 - **Load-unpacked users do not auto-update.** GitHub Releases zip + popup banner is the update path. Do not assume CWS.
 - **Cross-device:** macOS (owner), Windows, Linux. WASM must work when WebGPU has no adapter.
@@ -65,7 +65,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 
 | File | Role |
 |---|---|
-| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.40, CF-primary `fuseNeuralScores` |
+| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.05, `DINO_STRONG_RESCUE_FLOOR` 0.40, `DINO_STRONG_RESCUE_MIN` 0.98, `DINO_RESCUE_MIN` 0.70, CF-primary `fuseNeuralScores` |
 | `src/graphic-gate.js` | Shared flat-graphic policy for browser and Node evaluation |
 | `src/offscreen.js` | ORT WebGPU/WASM, DINO 224 then CF TTA |
 | `src/content.js` | scan, fixed badges, `Map` badgeByEl |
@@ -75,7 +75,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 | `src/c2pa-reader.js` | C2PA reader |
 
 - Issue 23 (fixed in PR 24 / v1.0.7): overlay WeakMap drift + DINO max false positives.
-- Live smoke on 2026-08-13 found seven false positives among 31 captured known-real images. That remains a claim blocker pending broader live validation. The current 0.40 floor + graphic-gate policy has not been rerun on the exact 893-image fixture, so older experimental metrics must not be labeled as its score.
+- The public 893-image fixture was rerun with the new two-tier rescue policy (0.05/0.98 strong rescue, 0.40/0.70 normal rescue): 85.0% BA, 70.4% TPR, 99.6% TNR. Live-smoke checks still remain required before any claim.
 
 ---
 

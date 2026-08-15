@@ -107,12 +107,24 @@ describe('fuseNeuralScores', () => {
 
   it('does not let saturated DINO override a near-zero CF', () => {
     assert.equal(fuseNeuralScores(0.02, 0.99), 0.02);
-    assert.equal(fuseNeuralScores(0.37, 1), 0.37);
+    assert.equal(fuseNeuralScores(0.04, 0.99), 0.04);
+  });
+
+  it('ignores DINO rescue when it is not high-confidence', () => {
+    assert.equal(fuseNeuralScores(0.45, 0.66), 0.45);
+    assert.equal(fuseNeuralScores(0.55, 0.69), 0.55);
   });
 
   it('lets DINO lift uncertain CF scores', () => {
     assert.equal(fuseNeuralScores(0.5, 0.9), 0.9);
     assert.equal(fuseNeuralScores(0.55, 0.7), 0.7);
+  });
+
+  it('only rescues low CF scores with near-saturated DINO', () => {
+    assert.equal(fuseNeuralScores(0.10, 0.99), 0.99);
+    assert.equal(fuseNeuralScores(0.10, 0.70), 0.10);
+    assert.equal(fuseNeuralScores(0.35, 0.98), 0.98);
+    assert.equal(fuseNeuralScores(0.35, 0.97), 0.35);
   });
 
   it('falls back to CF when dino head is unavailable', () => {

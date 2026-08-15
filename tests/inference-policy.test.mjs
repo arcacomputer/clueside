@@ -23,7 +23,7 @@ describe('production inference policy', () => {
   });
 
   it('applies CF-primary neural fusion before deterministic metadata', () => {
-    assert.equal(fuseInferenceScores(0.149, 0.99, noSignals).rawScore, 0.149);
+    assert.equal(fuseInferenceScores(0.04, 0.99, noSignals).rawScore, 0.04);
     assert.equal(fuseInferenceScores(0.5, 0.8, noSignals).rawScore, 0.8);
 
     const forced = fuseInferenceScores(0.1, 0.1, {
@@ -43,6 +43,11 @@ describe('production inference policy', () => {
     assert.equal(fuseInferenceScores(0.45, 0.99, noSignals, DEFAULT_THRESHOLD, {
       graphicGate: true,
     }).rawScore, 0.45);
+  });
+
+  it('requires a high-confidence DINO rescue before lifting a low CF score', () => {
+    assert.equal(fuseInferenceScores(0.45, 0.66, noSignals).rawScore, 0.45);
+    assert.equal(fuseInferenceScores(0.45, 0.72, noSignals).rawScore, 0.72);
   });
 
   it('does not suppress CF-confident AI illustrations on flat graphics', () => {

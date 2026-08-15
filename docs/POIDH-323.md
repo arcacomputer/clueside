@@ -182,4 +182,4 @@ Known competing claims and reject patterns. Do not copy their failure modes.
 
 Other competitors named in maintainer threads: anudit, RealGuard, Rajesh, PixelWitness. Several use score remapping or Platt-style calibration that paints low raw scores as 65%.
 
-This repo's v1.0.9 policy uses max-of-inspected-view CF TTA, a CF-primary 0.40 floor, a flat-graphic guard, and `DEFAULT_THRESHOLD` 0.65 on raw fused p(AI). A 2026-08-13 live smoke covered Unsplash, IKEA, Lummi, and Wikipedia. The captured known-real sample still had 7 false positives in 31 images, so broader live validation and a fresh full-fixture run remain required before any claim.
+This repo's current policy uses max-of-inspected-view CF TTA, a CF-primary two-tier rescue (0.05 rescue floor with near-saturated DINO >= 0.98, 0.40 normal rescue floor with DINO >= 0.70), a flat-graphic guard, and `DEFAULT_THRESHOLD` 0.65 on raw fused p(AI). A 2026-08-13 live smoke covered Unsplash, IKEA, Lummi, and Wikipedia. The captured known-real sample still had 7 false positives in 31 images, so broader live validation and a fresh full-fixture run remain required before any claim.
