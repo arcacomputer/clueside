@@ -75,6 +75,14 @@ describe('Astro website boundary', () => {
     assert.doesNotMatch(deployScript, /CLOUDFLARE_API_TOKEN\s*=/);
   });
 
+  it('ships production browser security headers', async () => {
+    const headers = await read('site/public/_headers');
+    assert.match(headers, /Strict-Transport-Security: max-age=31536000; includeSubDomains/);
+    assert.match(headers, /Content-Security-Policy: default-src 'self'/);
+    assert.match(headers, /script-src 'self'/);
+    assert.match(headers, /frame-ancestors 'none'/);
+  });
+
   it('keeps extension packaging independent from site output', async () => {
     const packaging = await read('scripts/package.mjs');
     assert.doesNotMatch(packaging, /site\/dist/);
