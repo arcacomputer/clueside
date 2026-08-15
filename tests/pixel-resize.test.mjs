@@ -119,7 +119,7 @@ describe('pillowResize goldens', () => {
       );
     });
   }
-}
+});
 
 describe('goldenChannels', () => {
   it('uses stored channels when present', () => {
