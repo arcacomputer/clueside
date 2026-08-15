@@ -1,17 +1,20 @@
 /**
  * Browser parity harness entry. Bundled by eval/parity/build.mjs and
  * served by eval/parity/server.mjs. Runs the EXACT product path:
- * createImageBitmap -> canvas resize/crop (src/clip-preprocess.js) ->
- * onnxruntime-web WASM (src/community-forensics.js), over a manifest of
- * benchmark images, and dumps per-view sigmoids as JSON.
+ * createImageBitmap -> pillowResize crop views (src/clip-preprocess.js) ->
+ * onnxruntime-web WASM (src/community-forensics.js), plus the shared
+ * flat-graphic gate (src/graphic-gate.js) applied to the CF+DINO fusion
+ * the same way src/offscreen.js and eval/harness.mjs apply it, over a
+ * manifest of benchmark images, and dumps per-view sigmoids as JSON.
  *
  * Query params:
- *   ?smooth=low  force imageSmoothingQuality back to 'low' (A/B probe)
  *   ?limit=40    cap image count
  */
 
 import * as ort from 'onnxruntime-web';
 import { preprocessBitmapViews } from '../../src/clip-preprocess.js';
+import { analyzeGraphicGate } from '../../src/graphic-gate.js';
+import { fuseNeuralScores } from '../../src/fuse.js';
 import { createCommunityForensicsSession, predictViews } from '../../src/community-forensics.js';
 import {
   DINO_INPUT_NAME,
@@ -22,19 +25,6 @@ import {
 
 const params = new URLSearchParams(location.search);
 const LIMIT = Number(params.get('limit') || 40);
-
-if (params.get('smooth') === 'low') {
-  const proto = OffscreenCanvasRenderingContext2D.prototype;
-  const desc = Object.getOwnPropertyDescriptor(proto, 'imageSmoothingQuality');
-  Object.defineProperty(proto, 'imageSmoothingQuality', {
-    get() {
-      return desc.get.call(this);
-    },
-    set() {
-      desc.set.call(this, 'low');
-    },
-  });
-}
 
 const out = document.getElementById('out');
 const status = document.getElementById('status');
@@ -80,6 +70,7 @@ async function main() {
       const res = await fetch(item.url);
       const blob = await res.blob();
       const bitmap = await createImageBitmap(blob);
+      const graphicGate = analyzeGraphicGate(bitmap).isGraphic;
       const views = await preprocessBitmapViews(bitmap);
 
       let dino = null;
@@ -91,10 +82,21 @@ async function main() {
       }
       bitmap.close();
 
-      const { named } = await predictViews(session, views);
+      const { named, neuralPAi } = await predictViews(session, views);
       const viewsOut = {};
       for (const v of named) viewsOut[v.name] = v.score;
-      results.push({ file: item.name, label: item.label, views: viewsOut, dino });
+      // Same gate application as production: the flat-graphic gate
+      // suppresses DINO lift inside fuseNeuralScores.
+      const fused = fuseNeuralScores(neuralPAi, dino, { graphicGate });
+      results.push({
+        file: item.name,
+        label: item.label,
+        views: viewsOut,
+        dino,
+        cf: neuralPAi,
+        graphic_gate: graphicGate,
+        fused,
+      });
     } catch (err) {
       results.push({ file: item.name, label: item.label, error: String(err?.message || err) });
     }
