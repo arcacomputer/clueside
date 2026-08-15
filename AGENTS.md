@@ -32,7 +32,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Manifest V3.** `onnxruntime-web` in an offscreen document. WebGPU with WASM fallback (probe the adapter; do not latch a WebGPU error).
 - **Auto-scan ordinary webpages.** Confidence on every badge: AI / OK / uncertain.
 - **Hybrid is allowed:** neural + C2PA + EXIF/XMP + PNG/JPEG comments + weak URL hints. A URL hint alone must not cross 0.65.
-- **Current fusion: CF-primary.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative when CF >= 0.65 or CF < 0.05. Between 0.05 and 0.40, DINO may only lift when it is near-saturated (>= 0.98). Between 0.40 and 0.65, DINO may lift at >= 0.70. The flat-graphic gate suppresses DINO lift on catalog art and UI-like images. **Do not restore raw max(CF, DINO) or remove the graphic gate without fresh public and live-site evidence.**
+- **Current fusion: CF-primary, three tiers.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative at >= 0.65. Sub-floor tier: below CF 0.03, rescue only when CF >= 0.005 (not flatlined) AND DINO >= 0.999; a CF hard zero is never overridden. Strong tier: CF in [0.03, 0.30) needs DINO >= 0.96. Normal tier: CF in [0.30, 0.65) needs DINO >= 0.70. The flat-graphic gate blocks every rescue tier on catalog art and UI-like images. Bands were fit under a hard stress-set constraint (240 stock/catalog/product reals, zero new FPs allowed). **Do not restore raw max(CF, DINO), remove the graphic gate, or loosen these bands without rerunning the bench plus the stress set and live-site checks.**
 - **Overlay:** badge store must be an iterable `Map`, not a `WeakMap`. Reposition on scroll / resize / `visualViewport` / mutations. Never wrap images.
 - **Load-unpacked users do not auto-update.** GitHub Releases zip + popup banner is the update path. Do not assume CWS.
 - **Cross-device:** macOS (owner), Windows, Linux. WASM must work when WebGPU has no adapter.
@@ -65,8 +65,9 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 
 | File | Role |
 |---|---|
-| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.05, `DINO_STRONG_RESCUE_FLOOR` 0.40, `DINO_STRONG_RESCUE_MIN` 0.98, `DINO_RESCUE_MIN` 0.70, CF-primary `fuseNeuralScores` |
+| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.03, `DINO_STRONG_RESCUE_FLOOR` 0.30, `DINO_STRONG_RESCUE_MIN` 0.96, `DINO_RESCUE_MIN` 0.70, `DINO_SUBFLOOR_CF_MIN` 0.005, `DINO_SUBFLOOR_MIN` 0.999, CF-primary `fuseNeuralScores` |
 | `src/graphic-gate.js` | Shared flat-graphic policy for browser and Node evaluation |
+| `src/pixel-resize.js` | Pillow-exact bicubic resize shared by the extension and the Node harness for the CF path (byte-exact vs Pillow 12.3.0 goldens) |
 | `src/offscreen.js` | ORT WebGPU/WASM, DINO 224 then CF TTA |
 | `src/content.js` | scan, fixed badges, `Map` badgeByEl |
 | `src/community-forensics.js` | CommunityForensics ViT head |
@@ -75,7 +76,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 | `src/c2pa-reader.js` | C2PA reader |
 
 - Issue 23 (fixed in PR 24 / v1.0.7): overlay WeakMap drift + DINO max false positives.
-- The public 893-image fixture was rerun with the new two-tier rescue policy (0.05/0.98 strong rescue, 0.40/0.70 normal rescue): 85.0% BA, 70.4% TPR, 99.6% TNR. Live-smoke checks still remain required before any claim.
+- The public 893-image fixture on the Pillow-exact preprocess and three-tier policy: 87.7% BA, 75.8% TPR, 99.6% TNR (harness-verified, not simulated). Stress set (240 stock/catalog/product reals): 2 FPs, identical images to the prior policy. Browser vs Node parity: 16/16 decisions, max per-view CF delta 0.0005. The DINO path still uses canvas/RawImage resize (probe trained against it); retraining the probe on Pillow-preprocessed features is the documented follow-up. Live-smoke checks still remain required before any claim.
 
 ---
 
