@@ -21,7 +21,17 @@ def add(name, arr, outw, outh):
     ch = arr.shape[2]
     mode = {1: 'L', 3: 'RGB', 4: 'RGBA'}[ch]
     img = Image.fromarray(arr.squeeze() if ch == 1 else arr, mode=mode)
-    out = img.resize((outw, outh), Image.BICUBIC)
+    # Pillow.Image.resize(RGBA) converts to premultiplied RGBa first. The
+    # extension resizes each channel independently on getImageData pixels
+    # (src/pixel-resize.js). Goldens follow that contract so the regen path
+    # can validate 4-channel pillowResize.
+    if mode == 'RGBA':
+        out = Image.merge(
+            'RGBA',
+            [band.resize((outw, outh), Image.BICUBIC) for band in img.split()],
+        )
+    else:
+        out = img.resize((outw, outh), Image.BICUBIC)
     ob = np.asarray(out)
     if ch == 1:
         ob = ob.reshape(outh, outw, 1)
