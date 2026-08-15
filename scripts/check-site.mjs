@@ -10,6 +10,8 @@ const required = [
   'styles.css',
   'app.js',
   'assets/mark.svg',
+  'assets/social-card.svg',
+  'assets/social-card.png',
   'robots.txt',
   'sitemap-index.xml',
   'sitemap-0.xml',
@@ -56,6 +58,17 @@ for (const phrase of [
   if (!html.includes(phrase)) throw new Error(`Required site disclosure missing: ${phrase}`);
 }
 if (/—/.test(html)) throw new Error('Public copy contains an em dash');
+
+for (const metadata of [
+  '<meta property="og:site_name" content="Clueside">',
+  '<meta property="og:image" content="https://clueside.com/assets/social-card.png">',
+  '<meta property="og:image:width" content="1200">',
+  '<meta property="og:image:height" content="630">',
+  '<meta name="twitter:card" content="summary_large_image">',
+  '<meta name="twitter:image" content="https://clueside.com/assets/social-card.png">',
+]) {
+  if (!html.includes(metadata)) throw new Error(`Required sharing metadata missing: ${metadata}`);
+}
 
 const robots = await readFile(join(site, 'robots.txt'), 'utf8');
 if (!robots.includes('https://clueside.com/sitemap-index.xml')) {

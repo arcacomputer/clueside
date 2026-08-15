@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFile(join(ROOT, path), 'utf8');
+const readBinary = (path) => readFile(join(ROOT, path));
 const readJson = async (path) => JSON.parse(await read(path));
 
 describe('Astro website boundary', () => {
@@ -73,6 +74,30 @@ describe('Astro website boundary', () => {
     assert.match(deployScript, /versions', 'upload/);
     assert.match(deployScript, /versions',\s*'deploy/);
     assert.doesNotMatch(deployScript, /CLOUDFLARE_API_TOKEN\s*=/);
+  });
+
+  it('ships complete Open Graph and X card metadata with a dedicated wide image', async () => {
+    const [layout, card, cardPng] = await Promise.all([
+      read('site/src/layouts/BaseLayout.astro'),
+      read('site/public/assets/social-card.svg'),
+      readBinary('site/public/assets/social-card.png'),
+    ]);
+
+    assert.match(layout, /socialImage\s*=\s*['"]https:\/\/clueside\.com\/assets\/social-card\.png['"]/);
+    assert.match(layout, /property="og:site_name"/);
+    assert.match(layout, /property="og:image" content=\{socialImage\}/);
+    assert.match(layout, /property="og:image:secure_url" content=\{socialImage\}/);
+    assert.match(layout, /property="og:image:type" content="image\/png"/);
+    assert.match(layout, /property="og:image:width" content="1200"/);
+    assert.match(layout, /property="og:image:height" content="630"/);
+    assert.match(layout, /property="og:image:alt" content=\{socialImageAlt\}/);
+    assert.match(layout, /name="twitter:card" content="summary_large_image"/);
+    assert.match(layout, /name="twitter:image" content=\{socialImage\}/);
+    assert.match(layout, /name="twitter:image:alt" content=\{socialImageAlt\}/);
+    assert.match(card, /viewBox="0 0 1200 630"/);
+    assert.deepEqual([...cardPng.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(cardPng.readUInt32BE(16), 1200);
+    assert.equal(cardPng.readUInt32BE(20), 630);
   });
 
   it('ships production browser security headers', async () => {

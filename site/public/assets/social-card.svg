@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Clueside social preview</title>
+  <desc id="desc">Clueside branding with the message Look twice. Upload nothing. and a local image signal mark.</desc>
+  <defs>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" fill="none" stroke="#F4F0E7" stroke-opacity="0.055" stroke-width="1"/>
+    </pattern>
+    <clipPath id="canvas">
+      <rect width="1200" height="630" rx="0"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#canvas)">
+    <rect width="1200" height="630" fill="#151714"/>
+    <rect width="1200" height="630" fill="url(#grid)"/>
+    <rect width="1200" height="10" fill="#FF5A36"/>
+    <circle cx="1118" cy="80" r="250" fill="#FF5A36" fill-opacity="0.045"/>
+
+    <g transform="translate(72 62)">
+      <rect width="72" height="72" rx="16" fill="#F4F0E7"/>
+      <path d="M18 28V18h10M44 18h10v10M54 44v10H44M28 54H18V44" fill="none" stroke="#151714" stroke-width="5" stroke-linecap="square"/>
+      <rect x="28" y="28" width="16" height="16" fill="#FF5A36"/>
+      <path d="M28 36h16" stroke="#F4F0E7" stroke-width="2"/>
+    </g>
+    <text x="164" y="114" fill="#F4F0E7" font-family="Arial, Helvetica, sans-serif" font-size="47" font-weight="800" letter-spacing="-1.5">clueside</text>
+
+    <g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="72" letter-spacing="-3">
+      <text x="72" y="271" fill="#F4F0E7">LOOK TWICE.</text>
+      <text x="72" y="352" fill="#FF5A36">UPLOAD NOTHING.</text>
+    </g>
+    <text x="76" y="409" fill="#F4F0E7" fill-opacity="0.76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="500">Browser-local AI-image signals.</text>
+    <text x="76" y="444" fill="#F4F0E7" fill-opacity="0.76" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="500">The clues stay on your side.</text>
+
+    <g transform="translate(785 137)">
+      <path d="M0 84V0h84M246 0h84v84M330 246v84h-84M84 330H0v-84" fill="none" stroke="#F4F0E7" stroke-width="12" stroke-linecap="square"/>
+      <rect x="111" y="111" width="108" height="108" fill="#FF5A36"/>
+      <path d="M111 165h108" stroke="#F4F0E7" stroke-width="8"/>
+      <path d="M165 111v108" stroke="#151714" stroke-opacity="0.2" stroke-width="2"/>
+      <text x="165" y="383" text-anchor="middle" fill="#F4F0E7" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="3">LOCAL SIGNAL</text>
+    </g>
+
+    <line x1="72" y1="520" x2="1128" y2="520" stroke="#F4F0E7" stroke-opacity="0.2"/>
+    <g font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" letter-spacing="1.4">
+      <text x="72" y="570" fill="#F4F0E7">OPEN SOURCE</text>
+      <circle cx="211" cy="565" r="4" fill="#FF5A36"/>
+      <text x="233" y="570" fill="#F4F0E7">ON DEVICE</text>
+      <circle cx="350" cy="565" r="4" fill="#FF5A36"/>
+      <text x="372" y="570" fill="#F4F0E7">NO IMAGE UPLOADS</text>
+      <text x="1128" y="570" text-anchor="end" fill="#FF5A36">CLUESIDE.COM</text>
+    </g>
+  </g>
+</svg>

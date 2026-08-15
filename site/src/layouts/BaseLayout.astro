@@ -4,6 +4,8 @@ interface Props {
   description: string;
   canonical?: string;
   noindex?: boolean;
+  socialImage?: string;
+  socialImageAlt?: string;
 }
 
 const {
@@ -11,6 +13,8 @@ const {
   description,
   canonical = 'https://clueside.com/',
   noindex = false,
+  socialImage = 'https://clueside.com/assets/social-card.png',
+  socialImageAlt = 'Clueside. Look twice. Upload nothing. Browser-local AI-image signals.',
 } = Astro.props;
 ---
 
@@ -22,11 +26,23 @@ const {
     <meta name="description" content={description} />
     <meta name="theme-color" content="#f4f0e7" />
     {noindex && <meta name="robots" content="noindex" />}
-    <meta property="og:title" content="Clueside | The clues stay on your side" />
-    <meta property="og:description" content="Private, browser-local AI-image signals. Look twice. Upload nothing." />
+    <meta property="og:site_name" content="Clueside" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:secure_url" content={socialImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={socialImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={socialImageAlt} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
