@@ -10,7 +10,7 @@
  * Usage: node eval/fetch-train.mjs <out-dir>
  */
 
-import { mkdir, writeFile, readdir } from 'node:fs/promises';
+import { access, mkdir, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const OUT = process.argv[2];
@@ -37,13 +37,49 @@ const SOURCES = [
   { name: 'food', label: 'real', dataset: 'ethz/food101', columns: ['image'], count: 300, offsets: [200, 400, 600] },
   { name: 'celeba', label: 'real', dataset: 'nielsr/CelebA-faces', columns: ['image'], count: 300, offsets: [200, 400, 600] },
   { name: 'imgnet', label: 'real', dataset: 'frgfm/imagenette', columns: ['image'], count: 300, offsets: [5000, 6000, 7000] },
+  // --- Hard-negative reals: professional stock, product catalogs,
+  // interiors, and high-saturation nature. These teach the probe not to
+  // fire on polished real photography (github issue 23 failure mode).
+  // Rows are strictly disjoint from the eval stress set, which uses
+  // unsplash-lite rows 0-79 and rows 0-391 (stride 10) of the others.
+  { name: 'unsplash2', label: 'real', dataset: '1aurent/unsplash-lite', urlColumn: 'photo.image_url', urlParam: 'w=1600', nameByRow: true, columns: [], count: 800, offsets: [200, 300, 400, 500, 600, 700, 800, 900] },
+  { name: 'abo2', label: 'real', dataset: 'amaye15/amazon_berkeley_objects', columns: ['image'], minSide: 200, nameByRow: true, count: 300, offsets: [500, 600, 700] },
+  { name: 'lsunbed2', label: 'real', dataset: 'pcuenq/lsun-bedrooms', columns: ['image'], nameByRow: true, count: 300, offsets: [500, 600, 700] },
+  { name: 'deepfashion2', label: 'real', dataset: 'Marqo/deepfashion-inshop', split: 'data', columns: ['image'], nameByRow: true, count: 300, offsets: [500, 600, 700] },
+  { name: 'flowers2', label: 'real', dataset: 'nkirschi/oxford-flowers', columns: ['image'], nameByRow: true, count: 300, offsets: [500, 600, 700] },
 ];
 
 const FETCH_TIMEOUT = 30000;
 const CONCURRENCY = 10;
 
+// Optional Hugging Face auth: raises the datasets-server rate limit far
+// above the anonymous tier. Reads HF_TOKEN or the huggingface-cli cache;
+// the token is only ever attached to huggingface.co hosts.
+let HF_TOKEN = process.env.HF_TOKEN || null;
+if (!HF_TOKEN) {
+  try {
+    const { readFileSync } = await import('node:fs');
+    const { homedir } = await import('node:os');
+    HF_TOKEN = readFileSync(`${homedir()}/.cache/huggingface/token`, 'utf8').trim() || null;
+  } catch {}
+}
+
+function hfHeaders(url) {
+  if (!HF_TOKEN) return undefined;
+  try {
+    const host = new URL(url).hostname;
+    if (host === 'huggingface.co' || host.endsWith('.huggingface.co')) {
+      return { Authorization: `Bearer ${HF_TOKEN}` };
+    }
+  } catch {}
+  return undefined;
+}
+
 async function fetchJson(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    headers: hfHeaders(url),
+  });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   return res.json();
 }
@@ -64,13 +100,30 @@ function extToUse(url, contentType) {
   return 'jpg';
 }
 
-async function downloadImage(url, destBase) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+async function downloadImage(url, destBase, minSide) {
+  for (const ext of ['jpg', 'png', 'webp']) {
+    try {
+      await access(`${destBase}.${ext}`);
+      return true; // already fetched on a prior attempt
+    } catch {}
+  }
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    headers: hfHeaders(url),
+  });
   if (!res.ok) throw new Error(`download ${res.status}`);
   const type = res.headers.get('content-type') || '';
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 4096) throw new Error('too small');
+  if (minSide) {
+    // Skip (not substitute) images under the gate, mirroring how the
+    // shipped probe's hard negatives were assembled.
+    const sharp = (await import('sharp')).default;
+    const meta = await sharp(buf).metadata();
+    if (Math.min(meta.width || 0, meta.height || 0) < minSide) return false;
+  }
   await writeFile(`${destBase}.${extToUse(url, type)}`, buf);
+  return true;
 }
 
 async function pool(items, worker, concurrency) {
@@ -96,6 +149,17 @@ async function pool(items, worker, concurrency) {
 async function pullSource(spec) {
   const dir = join(OUT, spec.label);
   await mkdir(dir, { recursive: true });
+
+  // Resumable: a rerun after a rate-limit abort skips sources that already
+  // hit their target count, so retries spend the request budget only on
+  // what is still missing.
+  try {
+    const existing = (await readdir(dir)).filter((f) => f.startsWith(`${spec.name}-`)).length;
+    if (existing >= spec.count) {
+      console.log(`[${spec.name}] already complete (${existing}/${spec.count}), skipping`);
+      return;
+    }
+  } catch {}
 
   let resolved;
   try {
@@ -124,18 +188,49 @@ async function pullSource(spec) {
     let fromThisOffset = 0;
     for (const row of rowsData.rows || []) {
       if (jobs.length >= spec.count || fromThisOffset >= perOffset) break;
+      const rowName = spec.nameByRow
+        ? `${spec.name}-${row.row_idx ?? offset + fromThisOffset}`
+        : null;
+      if (spec.urlColumn) {
+        // Dotted paths reach into nested row objects, e.g. 'photo.image_url'.
+        const url = spec.urlColumn
+          .split('.')
+          .reduce((v, k) => (v == null ? v : v[k]), row.row);
+        if (typeof url !== 'string' || !url) continue;
+        const src = spec.urlParam
+          ? `${url}${url.includes('?') ? '&' : '?'}${spec.urlParam}`
+          : url;
+        jobs.push({
+          src,
+          destBase: join(dir, rowName ?? `${spec.name}-${String(seq++).padStart(5, '0')}`),
+        });
+        fromThisOffset++;
+        continue;
+      }
       for (const col of spec.columns) {
         if (jobs.length >= spec.count || fromThisOffset >= perOffset) break;
         const src = row.row?.[col]?.src;
         if (!src) continue;
-        jobs.push({ src, destBase: join(dir, `${spec.name}-${String(seq++).padStart(5, '0')}`) });
+        jobs.push({
+          src,
+          destBase: join(dir, rowName ?? `${spec.name}-${String(seq++).padStart(5, '0')}`),
+        });
         fromThisOffset++;
       }
     }
   }
 
-  const { done, failed } = await pool(jobs, (j) => downloadImage(j.src, j.destBase), CONCURRENCY);
-  console.log(`[${spec.name}] ${done} downloaded, ${failed} failed (${spec.label})`);
+  let skipped = 0;
+  const { done, failed } = await pool(
+    jobs,
+    (j) =>
+      downloadImage(j.src, j.destBase, spec.minSide).then((saved) => {
+        if (!saved) skipped++;
+      }),
+    CONCURRENCY
+  );
+  const skipNote = skipped ? `, ${skipped} skipped under ${spec.minSide}px` : '';
+  console.log(`[${spec.name}] ${done - skipped} downloaded, ${failed} failed${skipNote} (${spec.label})`);
 }
 
 async function main() {
