@@ -88,10 +88,10 @@ describe('fuseNeuralScores policy', () => {
   });
 
   it('low CF is only rescued by near-saturated DINO', () => {
-    assert.equal(DINO_STRONG_RESCUE_FLOOR, 0.10);
-    assert.equal(DINO_STRONG_RESCUE_MIN, 0.90);
-    assert.equal(fuseNeuralScores(0.05, 0.91), 0.91);
-    assert.equal(fuseNeuralScores(0.05, 0.89), 0.05);
+    assert.equal(DINO_STRONG_RESCUE_FLOOR, 0.20);
+    assert.equal(DINO_STRONG_RESCUE_MIN, 0.96);
+    assert.equal(fuseNeuralScores(0.05, 0.97), 0.97);
+    assert.equal(fuseNeuralScores(0.05, 0.95), 0.05);
   });
 
   it('includes the DINO floor boundary in the lift band', () => {

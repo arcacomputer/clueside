@@ -8,9 +8,9 @@ export const UNCERTAIN_LOW = 0.45;
 /** CF scores below this need the saturated sub-floor tier to be rescued. */
 export const DINO_CF_FLOOR = 0.02;
 /** CF below this requires near-saturated DINO before it can be rescued. */
-export const DINO_STRONG_RESCUE_FLOOR = 0.10;
+export const DINO_STRONG_RESCUE_FLOOR = 0.20;
 /** DINO must be this confident to lift a low CF score into the rescue band. */
-export const DINO_STRONG_RESCUE_MIN = 0.90;
+export const DINO_STRONG_RESCUE_MIN = 0.96;
 /** DINO must be this confident to lift CF in the normal uncertain band. */
 export const DINO_RESCUE_MIN = 0.70;
 /**

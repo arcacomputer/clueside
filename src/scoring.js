@@ -8,8 +8,17 @@ import { DEFAULT_THRESHOLD } from './fuse.js';
 /** Extra CLIP crops run only when center p(AI) is in this band. */
 export const TTA_ADAPTIVE_LOW = 0.15;
 
-/** Stop remaining crops once any sigmoid is this high. */
-export const TTA_EARLY_EXIT = 0.9;
+/**
+ * A single view at or above this score carries the verdict on its own and
+ * stops remaining crops. Below it, a mid-band AI verdict needs agreement
+ * (see CF_AGREEMENT_MIN_VIEWS): live CDN-processed real photos can spike
+ * one crop into the 0.65 to 0.85 band while every other crop stays low,
+ * and a lone spiked crop is weak evidence.
+ */
+export const TTA_EARLY_EXIT = 0.85;
+
+/** Views at or above the threshold required for a mid-band CF verdict. */
+export const CF_AGREEMENT_MIN_VIEWS = 2;
 
 export const TTA_MODES = ['adaptive', 'always', 'center'];
 
@@ -48,13 +57,14 @@ export function aggregateViewScores(scores) {
 /**
  * Extra 440-corner / 512-center crops only help when the official center
  * crop is uncertain. A confident real (for example 0.04) will not become
- * 0.65 by taking the max of six similar scores.
+ * 0.65 by taking the max of six similar scores. The band now extends
+ * through the mid-band verdict range so a center crop in [0.65, 0.85)
+ * gathers corroborating views before the agreement rule judges it.
  * @param {number} centerScore
- * @param {number} [threshold]
  */
-export function shouldRunExtraCrops(centerScore, threshold = DEFAULT_THRESHOLD) {
+export function shouldRunExtraCrops(centerScore) {
   const p = clamp01(centerScore);
-  return p >= TTA_ADAPTIVE_LOW && p < threshold;
+  return p >= TTA_ADAPTIVE_LOW && p < TTA_EARLY_EXIT;
 }
 
 /**
@@ -85,7 +95,7 @@ export function foldTtaScores(scores, options = {}) {
   }
 
   const runExtra =
-    mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(center, threshold));
+    mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(center));
 
   if (!runExtra) {
     return { neuralPAi: center, extraRan: false, earlyExit: false, used };
@@ -101,7 +111,31 @@ export function foldTtaScores(scores, options = {}) {
     }
   }
 
-  return { neuralPAi: max, extraRan: true, earlyExit: false, used };
+  return { neuralPAi: agreedMax(max, used, threshold), extraRan: true, earlyExit: false, used };
+}
+
+/**
+ * Mid-band agreement rule. A max in [threshold, TTA_EARLY_EXIT) stands only
+ * when at least CF_AGREEMENT_MIN_VIEWS inspected views reach the threshold;
+ * otherwise CF falls back to the second-highest view. Views at or above
+ * TTA_EARLY_EXIT never reach here (they exit above with full authority).
+ * Single-view images keep their score: there is nothing to disagree.
+ * Shared by foldTtaScores and the live predictAdaptiveViews path.
+ * @param {number} max
+ * @param {number[]} used
+ * @param {number} threshold
+ */
+export function agreedMax(max, used, threshold = DEFAULT_THRESHOLD) {
+  if (max < threshold || used.length < 2) return max;
+  const above = used.filter((v) => v >= threshold).length;
+  if (above >= CF_AGREEMENT_MIN_VIEWS) return max;
+  let second = 0;
+  for (const v of used) {
+    if (v < max && v > second) second = v;
+  }
+  // Duplicate maxima count as agreement and were caught above; here the
+  // max is unique, so second is the true runner-up.
+  return second;
 }
 
 function clamp01(v) {

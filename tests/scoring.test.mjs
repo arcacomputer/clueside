@@ -46,22 +46,41 @@ describe('adaptive TTA fusion', () => {
 
   it('runs extras in the uncertain band including crying-robot ~0.20', () => {
     assert.equal(shouldRunExtraCrops(0.2), true);
-    const folded = foldTtaScores([0.2, 0.41, 0.72], { mode: 'adaptive' });
-    assert.equal(folded.neuralPAi, 0.72);
-    assert.equal(folded.extraRan, true);
+    // A lone 0.72 among low views falls back to the runner-up; a second
+    // agreeing view restores the max.
+    const lone = foldTtaScores([0.2, 0.41, 0.72], { mode: 'adaptive' });
+    assert.equal(lone.neuralPAi, 0.41);
+    assert.equal(lone.extraRan, true);
+    const agreed = foldTtaScores([0.2, 0.66, 0.72], { mode: 'adaptive' });
+    assert.equal(agreed.neuralPAi, 0.72);
   });
 
-  it('includes the low band edge 0.15 and excludes 0.65', () => {
+  it('includes the low band edge 0.15 through the mid band, excludes 0.85', () => {
     assert.equal(shouldRunExtraCrops(TTA_ADAPTIVE_LOW), true);
-    assert.equal(shouldRunExtraCrops(DEFAULT_THRESHOLD), false);
+    assert.equal(shouldRunExtraCrops(DEFAULT_THRESHOLD), true);
+    assert.equal(shouldRunExtraCrops(0.84), true);
+    assert.equal(shouldRunExtraCrops(TTA_EARLY_EXIT), false);
     assert.equal(shouldRunExtraCrops(0.149), false);
   });
 
-  it('always-max can lift a 0.04 center; adaptive must not', () => {
+  it('a lone mid-band view does not carry an AI verdict', () => {
+    // One view at 0.70 with every other view low falls back to the
+    // runner-up: live CDN-processed real photos spike single crops.
     const always = foldTtaScores([0.04, 0.7], { mode: 'always' });
     const adaptive = foldTtaScores([0.04, 0.7], { mode: 'adaptive' });
-    assert.equal(always.neuralPAi, 0.7);
+    assert.equal(always.neuralPAi, 0.04);
     assert.equal(adaptive.neuralPAi, 0.04);
+  });
+
+  it('two agreeing mid-band views keep the max', () => {
+    const folded = foldTtaScores([0.3, 0.7, 0.68], { mode: 'always' });
+    assert.equal(folded.neuralPAi, 0.7);
+  });
+
+  it('a single view at or above 0.85 keeps full authority', () => {
+    const folded = foldTtaScores([0.3, 0.86], { mode: 'always' });
+    assert.equal(folded.neuralPAi, 0.86);
+    assert.equal(folded.earlyExit, true);
   });
 
   it('center mode ignores extras even in the adaptive band', () => {

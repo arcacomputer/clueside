@@ -38,6 +38,9 @@ async function getUpdateState() {
 
 async function checkForUpdate() {
   try {
+    // No network attempts while offline: scoring is fully local and the
+    // update banner can wait for the next online check.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
     const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
       headers: { Accept: 'application/vnd.github+json' },
     });
