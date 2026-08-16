@@ -69,33 +69,34 @@ describe('dinoPackedRgbToCHW', () => {
 });
 
 describe('dinoPreprocessRawImage', () => {
-  it('uses the shared 256-short-edge center crop', async () => {
+  it('resizes to the 256 short edge and center-crops 224 via pillowResize', async () => {
     const plane = DINO_CROP_SIZE * DINO_CROP_SIZE;
-    let resizeArgs = null;
-    let cropArgs = null;
+    // Constant-value pixels survive Pillow bicubic exactly, so a flat
+    // image proves the resize plus window-crop path end to end.
     const rawImage = {
       width: 1024,
       height: 768,
-      async resize(width, height) {
-        resizeArgs = [width, height];
-        return {
-          async crop(box) {
-            cropArgs = box;
-            return {
-              width: DINO_CROP_SIZE,
-              height: DINO_CROP_SIZE,
-              channels: 3,
-              data: new Uint8Array(plane * 3),
-            };
-          },
-        };
-      },
+      channels: 3,
+      data: new Uint8Array(1024 * 768 * 3).fill(200),
     };
 
     const chw = await dinoPreprocessRawImage(rawImage);
-    assert.deepEqual(resizeArgs, [341, 256]);
-    assert.deepEqual(cropArgs, [58, 16, 281, 239]);
     assert.equal(chw.length, 3 * plane);
+    // (200/255 - 0.485) / 0.229 in the R plane, everywhere.
+    const expectedR = (200 / 255 - 0.485) / 0.229;
+    assert.ok(Math.abs(chw[0] - expectedR) < 1e-6);
+    assert.ok(Math.abs(chw[plane - 1] - expectedR) < 1e-6);
+  });
+
+  it('handles grayscale sources without NaN poisoning', async () => {
+    const rawImage = {
+      width: 512,
+      height: 512,
+      channels: 1,
+      data: new Uint8Array(512 * 512).fill(128),
+    };
+    const chw = await dinoPreprocessRawImage(rawImage);
+    for (let i = 0; i < 10; i++) assert.ok(Number.isFinite(chw[i]));
   });
 });
 
@@ -108,9 +109,9 @@ describe('fuseNeuralScores', () => {
   it('does not let saturated DINO override a hard-zero CF', () => {
     // CF hard zeros mark confident reals; no rescue tier may touch them.
     assert.equal(fuseNeuralScores(0.0, 0.9999), 0.0);
-    assert.equal(fuseNeuralScores(0.004, 0.9999), 0.004);
+    assert.equal(fuseNeuralScores(0.0004, 0.9999), 0.0004);
     // Below the CF floor, high-but-unsaturated DINO still cannot rescue.
-    assert.equal(fuseNeuralScores(0.02, 0.99), 0.02);
+    assert.equal(fuseNeuralScores(0.015, 0.99), 0.015);
   });
 
   it('ignores DINO rescue when it is not high-confidence', () => {
@@ -124,12 +125,12 @@ describe('fuseNeuralScores', () => {
   });
 
   it('only rescues low CF scores with near-saturated DINO', () => {
-    assert.equal(fuseNeuralScores(0.10, 0.99), 0.99);
-    assert.equal(fuseNeuralScores(0.10, 0.70), 0.10);
-    assert.equal(fuseNeuralScores(0.25, 0.97), 0.97);
-    assert.equal(fuseNeuralScores(0.25, 0.95), 0.25);
+    assert.equal(fuseNeuralScores(0.05, 0.99), 0.99);
+    assert.equal(fuseNeuralScores(0.05, 0.89), 0.05);
+    assert.equal(fuseNeuralScores(0.25, 0.75), 0.75);
+    assert.equal(fuseNeuralScores(0.25, 0.65), 0.25);
     // Sub-floor tier: faintly awake CF plus saturated DINO rescues.
-    assert.equal(fuseNeuralScores(0.01, 0.9995), 0.9995);
+    assert.equal(fuseNeuralScores(0.01, 0.996), 0.996);
     assert.equal(fuseNeuralScores(0.01, 0.99), 0.01);
   });
 

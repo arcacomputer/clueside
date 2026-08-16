@@ -107,34 +107,12 @@ async function degradeBytes(buffer, rand) {
   return { buffer: outBuf, aug: parts.join('+') };
 }
 
-function toCHWDino(data, channels, size) {
-  const plane = size * size;
-  const out = new Float32Array(3 * plane);
-  for (let i = 0; i < plane; i++) {
-    const base = i * channels;
-    out[i] = (data[base] / 255 - DINO_MEAN[0]) / DINO_STD[0];
-    out[i + plane] = (data[base + 1] / 255 - DINO_MEAN[1]) / DINO_STD[1];
-    out[i + 2 * plane] = (data[base + 2] / 255 - DINO_MEAN[2]) / DINO_STD[2];
-  }
-  return out;
-}
-
-export async function dinoPreprocess(rawImage) {
-  const { width, height } = rawImage;
-  let rw, rh;
-  if (width < height) {
-    rw = DINO_SHORTEST;
-    rh = Math.round((height * DINO_SHORTEST) / width);
-  } else {
-    rh = DINO_SHORTEST;
-    rw = Math.round((width * DINO_SHORTEST) / height);
-  }
-  const resized = await rawImage.resize(rw, rh);
-  const sx = Math.floor((rw - DINO_CROP) / 2);
-  const sy = Math.floor((rh - DINO_CROP) / 2);
-  const cropped = await resized.crop([sx, sy, sx + DINO_CROP - 1, sy + DINO_CROP - 1]);
-  return toCHWDino(cropped.data, cropped.channels, DINO_CROP);
-}
+// Preprocess comes from the shipped module so probe training, the Node
+// harness, and the extension all compute identical DINO inputs (Pillow-
+// exact resize, guarded grayscale handling). A local duplicate here once
+// drifted from production; do not reintroduce one.
+import { dinoPreprocessRawImage as dinoPreprocess } from '../src/dino.js';
+export { dinoPreprocess };
 
 /** CLS + mean(patch tokens) from last_hidden_state [1, T, H]. */
 export function poolFeatures(hidden, tokens, hiddenSize) {
