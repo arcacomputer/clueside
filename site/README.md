@@ -26,7 +26,7 @@ npm run site:check
 
 This runs Astro diagnostics, builds `site/dist/`, and verifies required assets, disclosures, canonical URLs, sitemap output, and basic HTML invariants.
 
-The interactive detector is an explicitly illustrative scoring explainer. The 96.1% figure is a historical public result from an unshipped legacy raw-max policy, not the current policy and not a claim about POIDH's private evaluation set. The current CF-primary policy still needs a full rerun on the exact 893-image fixture.
+The interactive detector is an explicitly illustrative scoring explainer. The 96.1% figure is a historical public result from an unshipped legacy raw-max policy, not the current policy and not a claim about POIDH's private evaluation set. The current CF-primary policy measures 87.9% balanced accuracy (76.0% TPR, 99.8% TNR) on the exact 893-image fixture; see eval/benchmark-results.json, the single source of truth the site build is checked against.
 
 ## Cloudflare deployment
 

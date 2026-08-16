@@ -6,7 +6,7 @@ This document publishes the full results of our pre-claim live-site smoke test o
 
 **FAIL.** On pages we treated as known-real photography, 266 of 1,093 scanned images (24.3 percent) were labeled AI, against our bar of roughly 1 in 30. Including uncertain badges the rate was 31.6 percent. Everything else passed: offline scoring, overlay tracking, layouts, extension consoles, and AI-site recall (65.9 percent on an AI stock site).
 
-The public 893-image benchmark numbers for v1.2.0 (90.5 percent balanced accuracy, 99.8 percent real-photo pass at raw 0.65) remain true as measured and are reproducible with `eval/`. The failure is a gap between that benchmark distribution and what the live web actually serves. No bounty claim will be made until this is fixed and a re-run smoke passes.
+The public 893-image benchmark for v1.2.0 measured 90.5 percent balanced accuracy and a 99.8 percent real-photo pass at raw 0.65; the failure is a gap between that benchmark distribution and what the live web actually serves. (The fixes below deliberately trade bench points for live robustness: the shipped pipeline measures 87.9 percent balanced accuracy on the same fixture, reproducible with `eval/`.) No bounty claim will be made until this is fixed and a re-run smoke passes.
 
 ## Protocol
 
@@ -83,10 +83,27 @@ The work-in-progress list above is done. Findings and results:
 - **Verified with the implemented pipeline:** public bench 87.9 percent BA, 76.0 TPR, 99.8 TNR; stress set 3 of 240; held-out live-CDN guard 4 of 132 (3.0 percent, versus 9.2 percent for v1.2.0 on identical bytes). The live guard is now a permanent part of the evaluation gate next to the bench and stress sets, and the trade (2.6 bench points for a threefold live FP reduction) is deliberate: false positives on real photos are the failure that matters.
 - A full live smoke rerun of the fixed build is the next gate. No claim before it passes.
 
+## Second smoke (v1.3.0): 9.0 percent, and the failure moved to product imagery
+
+The full rerun found 54 confirmed-real false positives out of 603 images (9.0 percent). The Unsplash problem was gone; nearly every remaining flag was IKEA and Amazon product photography, and every one of those was probe-driven (CommunityForensics at 0.004 to 0.11 with the DINO probe at 0.97 or higher). The probe had never seen the product-CDN distribution: studio lighting, seamless backgrounds, CGI-adjacent marketing renders. Under the bounty's criterion this imagery counts as not generative AI, so we count every flag against ourselves.
+
+The fix (v1.3.1): probe retrained with 198 IKEA and Amazon product-CDN negatives, with 100 more held out as a fourth permanent guard in the evaluation gate. Result: the IKEA spot check went from 5 of 12 flagged to 0 of 12, the held-out product guard measures 3 of 100 (two of the three are CF-driven, not probe-driven), and the public bench is byte-identical at 87.9 BA, 76.0 TPR, 99.8 TNR, stress set 3 of 240.
+
+## Third smoke (v1.3.1): the accuracy bar passes, and a reliability bug surfaces
+
+The full smoke on a clean Chromium profile:
+
+- Confirmed-real false positives: 16 of 498, or 3.21 percent. The arc across the three rounds is 24.3 to 9.0 to 3.21 percent.
+- AI detection on Lummi's AI-generated feed: 64.29 percent at the raw 0.65 threshold.
+- Offline check: scoring fully functional with zero network traffic.
+- One reliability defect: with the test machine under active use, the WebGPU inference worker wedged once mid-pass and left 104 badges pending until restart. Accuracy was unaffected; availability was not.
+
+The fix (v1.3.2): a watchdog around every model run with a 20 second wedge timeout, a GPU device-loss listener, and a one-way automatic fallback to the WASM backend with a single in-flight retry, so a wedged or lost GPU device now degrades to slower scoring instead of a stalled page. No scoring code changed, so the benchmark numbers above are re-affirmed unchanged for v1.3.2.
+
 ## How to help
 
 - Reproduce any number here: `npm ci && npm run fetch-model`, then `npm run eval -- <dir>` on any labeled folder of images. The harness matches the extension byte for byte.
 - Live-web counterexamples are the most valuable thing you can contribute: pages where real photos flag or AI images pass, ideally with the exact image URLs. Open an issue with them.
 - Recipes for labeled, redistributable live-CDN image corpora (real photography served through imgix, Cloudinary, or similar chains) would directly improve the guard sets.
 
-All numbers in this document come from runs on 2026-08-16 against v1.2.0. Nothing here is a claim about POIDH's private evaluation set.
+All numbers in this document come from runs on 2026-08-16; versions are stated inline (v1.2.0 baseline through the v1.3.2 fix). Nothing here is a claim about POIDH's private evaluation set.

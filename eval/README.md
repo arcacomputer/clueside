@@ -76,12 +76,14 @@ Output:
 - Preprocess: resize shortest edge 440, 384 center + corners, plus a 512 center crop, CLIP mean/std (values from upstream `preprocessor_config.json`). Crops are taken on the resized full image, not on an already-cropped 384 square.
 - TTA (default `--tta=adaptive`): DINO at `>= 0.15` expands CF scoring to all
   views. Otherwise extra CF crops run when the official 440 center p(AI) is in
-  `[0.15, 0.65)`. Production CF takes the maximum raw sigmoid from inspected
-  views. Inference stops when any inspected crop reaches `>= 0.9`.
+  `[0.15, 0.85)`. Production CF takes the maximum raw sigmoid from inspected
+  views, with view agreement: a lone view in `[0.65, 0.85)` falls back to the
+  runner-up. Inference stops when any inspected crop reaches `>= 0.85`.
 - Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
-- Neural fusion: CF-primary. CF wins below `0.05` and at or above `0.65`;
-  between `0.05` and `0.40` DINO may only lift when near-saturated (`>= 0.98`);
-  between `0.40` and `0.65` DINO may lift at `>= 0.70`. The same native-pixel
+- Neural fusion: CF-primary. CF wins below `0.02` and at or above `0.65`;
+  between `0.02` and `0.20` DINO may only lift when near-saturated (`>= 0.96`);
+  between `0.20` and `0.65` DINO may lift at `>= 0.70`; below the `0.02` floor
+  a rescue additionally needs CF `>= 0.0005` and DINO `>= 0.995`. The same native-pixel
   flat-graphic gate used by the extension suppresses DINO lift on catalog art
   and UI-like images.
 - Final fusion: `src/inference-policy.js` is imported by the extension and both
