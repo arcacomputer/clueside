@@ -84,6 +84,8 @@ Eval harness: `npm run eval -- ./path/to/labeled-folder` after `npm run fetch-mo
 
 The legacy raw max result is included to make the tradeoff visible, not as a product claim. It caused unacceptable false positives on live stock and catalog images, so production keeps the CF guard. The historical 85.0% row was measured through a Node resize the extension never ran; later rows are computed by the same Pillow-exact resize the extension ships, byte for byte. On a 240-image full-resolution stock, catalog, and product photo stress set the production policy shows 4 false positives, all driven by CommunityForensics alone scoring `>= 0.65` (where it is authoritative by design), and zero attributable to a DINO rescue; the v1.1.0 configuration measured 7 on identical bytes. Public fixtures are directional only and are not a claim about Kenny's private held-out set.
 
+**Live-web evaluation (published openly):** our 2026-08-16 live-site smoke test of v1.2.0 FAILED on CDN-processed professional photography (details, isolation experiments, and the fix plan in [docs/live-smoke-2026-08-16.md](docs/live-smoke-2026-08-16.md)). Benchmark numbers above remain reproducible as stated; the live gap is being closed with ground-truthed live corpora and a retrained probe, and no bounty claim will be made until a re-run smoke passes. Live counterexamples are welcome as issues.
+
 ## Limitations
 
 - Local-bench numbers are not a claim about any private benchmark; distribution shift is real.

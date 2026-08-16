@@ -1,0 +1,26 @@
+{
+  "_note": "Single source of truth for published benchmark numbers. The site imports this file, scripts/check-site.mjs validates the built site against it, and tests/benchmark-docs.test.mjs fails the suite if README.md, AGENTS.md, or the manifest version drift from it. Numbers may only come from a full harness run (bench plus stress). On a release that does not touch scoring code (src fusion, preprocessing, models, probe), bump extensionVersion here to re-affirm the numbers still describe the shipped build; any release that touches scoring code requires a fresh run first.",
+  "measuredAt": "2026-08-15",
+  "extensionVersion": "1.2.0",
+  "decisionRule": "raw fused p(AI) >= 0.65, no remapping",
+  "bench": {
+    "n": 893,
+    "ai": 409,
+    "real": 484,
+    "ba": 90.5,
+    "tpr": 81.2,
+    "tnr": 99.8,
+    "falsePositives": 1
+  },
+  "stress": {
+    "n": 240,
+    "falsePositives": 4,
+    "dinoAttributableFalsePositives": 0,
+    "description": "Full-resolution stock, catalog, product, interior, and high-saturation real photos; remaining FPs are CommunityForensics alone at >= 0.65 where it is authoritative"
+  },
+  "legacyRawMax": {
+    "ba": 96.1,
+    "shipped": false,
+    "reason": "Unacceptable live false positives on stock and catalog images"
+  }
+}

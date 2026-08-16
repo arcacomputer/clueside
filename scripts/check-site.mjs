@@ -41,14 +41,20 @@ const banned = [
 for (const phrase of banned) {
   if (html.includes(phrase)) throw new Error(`Banned or misleading claim in site: ${phrase}`);
 }
+const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const bench = JSON.parse(await readFile(join(root, 'eval', 'benchmark-results.json'), 'utf8'));
 for (const phrase of [
-  '96.1%',
-  '893-image',
+  `${bench.legacyRawMax.ba}%`,
+  `${bench.bench.ba}%`,
+  `TPR ${bench.bench.tpr}%`,
+  `TNR ${bench.bench.tnr}%`,
+  `${bench.bench.n}-image`,
+  `${bench.stress.n}-image`,
   'illustrative',
   'Images never leave your device',
   'The clues stay',
   'Eligible images',
-  'current v1.0.8',
+  `current v${pkg.version}`,
   'legacy raw-max policy',
   'Current policy',
   'not shipped',

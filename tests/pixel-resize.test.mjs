@@ -4,13 +4,46 @@ import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { pillowResize } from '../src/pixel-resize.js';
 
-// The committed fixture is a 4-case subset (downscale RGB, tall 512 target,
-// upscale, grayscale) of the full 10-case set generated against Pillow
-// 12.3.0. Point PIXEL_RESIZE_GOLDENS at a full goldens.json to run all 10.
+// The committed fixture is a small subset (downscale RGB, tall 512 target,
+// upscale, grayscale, compact RGBA) of the full set from
+// eval/gen-pillow-goldens.py against Pillow 12.3.0. Point
+// PIXEL_RESIZE_GOLDENS at a full goldens.json to run every case, including
+// the production-shaped RGBA downscale the browser CF path uses.
 const GOLDEN_CANDIDATES = [
   process.env.PIXEL_RESIZE_GOLDENS,
   new URL('./fixtures/goldens.json.gz', import.meta.url).pathname,
 ].filter(Boolean);
+
+const GOLDEN_MODE_CHANNELS = Object.freeze({
+  L: 1,
+  RGB: 3,
+  RGBA: 4,
+});
+
+/**
+ * Packed-pixel width for a Pillow golden entry.
+ * Prefer the stored `channels` field that gen-pillow-goldens.py writes.
+ * Fall back to mode so the older RGB/L subset entries still load.
+ * RGBA must stay 4: getImageData pixels are what the browser CF path resizes.
+ */
+function goldenChannels(entry) {
+  const fromMode = GOLDEN_MODE_CHANNELS[entry.mode];
+  if (Number.isInteger(entry.channels)) {
+    if (entry.channels < 1 || entry.channels > 4) {
+      throw new Error(`Invalid golden channels: ${entry.channels}`);
+    }
+    if (fromMode && fromMode !== entry.channels) {
+      throw new Error(
+        `Golden ${entry.name}: mode ${entry.mode} disagrees with channels ${entry.channels}`
+      );
+    }
+    return entry.channels;
+  }
+  if (!fromMode) {
+    throw new Error(`Unsupported golden mode: ${String(entry.mode)}`);
+  }
+  return fromMode;
+}
 
 function loadGoldens() {
   for (const path of GOLDEN_CANDIDATES) {
@@ -47,16 +80,24 @@ describe('pillowResize goldens', () => {
     console.warn(
       'WARNING: goldens.json not found in any of:\n  ' +
         GOLDEN_CANDIDATES.join('\n  ') +
-        '\nSkipping Pillow byte-exact golden tests. Regenerate with the ' +
-        'gen_goldens.py script against Pillow 12.3.0.'
+        '\nSkipping Pillow byte-exact golden tests. Regenerate with ' +
+        'eval/gen-pillow-goldens.py against Pillow 12.3.0.'
     );
     it.skip('goldens.json missing, byte-exact checks skipped', () => {});
     return;
   }
 
+  const rgbaGoldens = goldens.filter((entry) => goldenChannels(entry) === 4);
+  it('includes an RGBA golden so 4-channel pillowResize is byte-checked', () => {
+    assert.ok(
+      rgbaGoldens.length > 0,
+      'goldens must include at least one RGBA / 4-channel case; the browser CF path always resizes getImageData pixels'
+    );
+  });
+
   for (const entry of goldens) {
     it(`matches Pillow byte-exact: ${entry.name} (${entry.mode} ${entry.inW}x${entry.inH} -> ${entry.outW}x${entry.outH})`, () => {
-      const channels = entry.mode === 'L' ? 1 : 3;
+      const channels = goldenChannels(entry);
       const input = Buffer.from(entry.input_b64, 'base64');
       const expected = Buffer.from(entry.output_b64, 'base64');
       assert.equal(input.length, entry.inW * entry.inH * channels);
@@ -78,6 +119,46 @@ describe('pillowResize goldens', () => {
       );
     });
   }
+});
+
+describe('goldenChannels', () => {
+  it('uses stored channels when present', () => {
+    assert.equal(goldenChannels({ mode: 'RGBA', channels: 4, name: 'a' }), 4);
+    assert.equal(goldenChannels({ mode: 'RGB', channels: 3, name: 'b' }), 3);
+    assert.equal(goldenChannels({ mode: 'L', channels: 1, name: 'c' }), 1);
+  });
+
+  it('maps mode when channels is absent (committed RGB/L subset)', () => {
+    assert.equal(goldenChannels({ mode: 'L' }), 1);
+    assert.equal(goldenChannels({ mode: 'RGB' }), 3);
+    assert.equal(goldenChannels({ mode: 'RGBA' }), 4);
+  });
+
+  it('does not map generator RGBA entries to 3 channels', () => {
+    const entry = {
+      name: 'prod_down_rgba',
+      mode: 'RGBA',
+      channels: 4,
+      inW: 1024,
+      inH: 768,
+      outW: 587,
+      outH: 440,
+    };
+    const channels = goldenChannels(entry);
+    assert.equal(channels, 4);
+    const legacy = entry.mode === 'L' ? 1 : 3;
+    assert.equal(entry.inW * entry.inH * channels, 1024 * 768 * 4);
+    assert.notEqual(entry.inW * entry.inH * channels, entry.inW * entry.inH * legacy);
+  });
+
+  it('rejects unknown modes and channel/mode mismatches', () => {
+    assert.throws(() => goldenChannels({ mode: 'CMYK' }), /Unsupported golden mode/);
+    assert.throws(
+      () => goldenChannels({ name: 'bad', mode: 'RGB', channels: 4 }),
+      /disagrees with channels/
+    );
+    assert.throws(() => goldenChannels({ mode: 'RGB', channels: 0 }), /Invalid golden channels/);
+  });
 });
 
 describe('pillowResize identity', () => {

@@ -162,6 +162,7 @@
   .metric-ledger .metric-detail { color:#aaa89f; grid-column:1/-1; margin-top:.35rem; font:400 .75rem Inter,ui-sans-serif,system-ui,sans-serif; }
   .source-strip { margin: 1.5rem 0 2rem; display:grid; grid-template-columns:110px 1fr; gap:.5rem 1rem; color:#aaa89f; font-size:.75rem; }
   .source-strip span { color:var(--signal-soft); font:700 .65rem ui-monospace,monospace; text-transform:uppercase; }
+  .honesty-note { max-width: 640px; color: var(--muted); font-size: .92rem; margin: 0 0 1.4rem; }
   .privacy { display:grid; grid-template-columns:1.15fr .85fr; gap:clamp(3rem,8vw,9rem); align-items:center; }
   .privacy-boundary { position:relative; border:2px solid var(--ink); padding:3.5rem 2rem; min-height:440px; display:grid; place-items:center; }
   .boundary-label { position:absolute; top:-.65rem; left:1rem; background:var(--paper); padding:0 .5rem; font-size:.7rem; }
