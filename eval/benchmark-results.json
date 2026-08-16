@@ -1,7 +1,7 @@
 {
   "_note": "Single source of truth for published benchmark numbers. The site imports this file, scripts/check-site.mjs validates the built site against it, and tests/benchmark-docs.test.mjs fails the suite if README.md, AGENTS.md, or the manifest version drift from it. Numbers may only come from a full harness run (bench plus stress). On a release that does not touch scoring code (src fusion, preprocessing, models, probe), bump extensionVersion here to re-affirm the numbers still describe the shipped build; any release that touches scoring code requires a fresh run first.",
   "measuredAt": "2026-08-16",
-  "extensionVersion": "1.3.1",
+  "extensionVersion": "1.3.2",
   "decisionRule": "raw fused p(AI) >= 0.65, no remapping",
   "bench": {
     "n": 893,

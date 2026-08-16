@@ -1,6 +1,6 @@
 {
   "name": "clueside",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Clueside: private, browser-local AI-image signals",
   "type": "module",
   "author": "Luis Felipe Abarca",
