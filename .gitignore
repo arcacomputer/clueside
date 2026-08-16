@@ -12,3 +12,4 @@ release/
 .vercel/
 .wrangler/
 site/.astro/
+models/**/onnx
