@@ -2,7 +2,7 @@
 
 **Author:** Luis Felipe Abarca  
 **Project license:** MIT (bundled assets have their own notices)
-**Version:** 1.3.0
+**Version:** 1.3.1
 
 Unpacked install from GitHub (`npm run fetch-model && npm run build`, then Load unpacked from `dist/`) remains the POIDH proof path. This file is listing copy for a future Chrome Web Store upload. The extension is **not** claimed to be on the Chrome Web Store.
 
@@ -103,7 +103,7 @@ Do not screenshot private or copyrighted photos you do not have rights to. Use t
 
 1. `npm ci && npm run package`
 2. Open the Chrome Web Store Developer Dashboard (one-time developer registration is a Google process; this repo does not submit for you).
-3. New item, upload `release/clueside-1.3.0.zip`
+3. New item, upload `release/clueside-1.3.1.zip`
 4. Paste the short and detailed descriptions above
 5. Set privacy policy URL to the hosted `docs/privacy.html`
 6. Attach screenshots and the 128px icon
