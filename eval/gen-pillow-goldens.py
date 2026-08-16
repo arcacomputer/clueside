@@ -21,10 +21,25 @@ def add(name, arr, outw, outh):
     ch = arr.shape[2]
     mode = {1: 'L', 3: 'RGB', 4: 'RGBA'}[ch]
     img = Image.fromarray(arr.squeeze() if ch == 1 else arr, mode=mode)
-    out = img.resize((outw, outh), Image.BICUBIC)
+    # Pillow.Image.resize(RGBA) converts to premultiplied RGBa first. The
+    # extension resizes each channel independently on getImageData pixels
+    # (src/pixel-resize.js). Goldens follow that contract so the regen path
+    # can validate 4-channel pillowResize.
+    if mode == 'RGBA':
+        out = Image.merge(
+            'RGBA',
+            [band.resize((outw, outh), Image.BICUBIC) for band in img.split()],
+        )
+    else:
+        out = img.resize((outw, outh), Image.BICUBIC)
     ob = np.asarray(out)
     if ch == 1:
         ob = ob.reshape(outh, outw, 1)
+    if ch != {'L': 1, 'RGB': 3, 'RGBA': 4}[mode]:
+        raise SystemExit(f'channels/mode mismatch: {ch} {mode}')
+    # `channels` is the packed-pixel width. Tests must not infer 3 from every
+    # non-L mode: RGBA is 4, and the browser CF path always resizes
+    # getImageData pixels as 4-channel.
     cases.append({
         'name': name, 'mode': mode,
         'inW': w, 'inH': h, 'outW': outw, 'outH': outh,
@@ -38,6 +53,14 @@ def add(name, arr, outw, outh):
 add('prod_down_rgb', noise(1600, 1200, 3), 587, 440)
 add('prod_down_512_rgb', noise(1600, 1200, 3), 683, 512)
 add('prod_down_rgba', noise(1024, 768, 4), 587, 440)
+# Compact RGBA for tests/fixtures/goldens.json.gz. Independent RNG so this
+# does not shift subsequent noise() cases.
+add(
+    'compact_rgba',
+    np.random.default_rng(4242).integers(0, 256, size=(120, 160, 4), dtype=np.uint8),
+    147,
+    110,
+)
 # Upscales
 add('upscale_rgb', noise(200, 150, 3), 587, 440)
 add('upscale_big_rgb', grad(64, 48, 3), 512, 700)
