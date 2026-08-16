@@ -6,11 +6,11 @@
 export const DEFAULT_THRESHOLD = 0.65;
 export const UNCERTAIN_LOW = 0.45;
 /** CF scores below this need the saturated sub-floor tier to be rescued. */
-export const DINO_CF_FLOOR = 0.03;
+export const DINO_CF_FLOOR = 0.02;
 /** CF below this requires near-saturated DINO before it can be rescued. */
-export const DINO_STRONG_RESCUE_FLOOR = 0.30;
+export const DINO_STRONG_RESCUE_FLOOR = 0.10;
 /** DINO must be this confident to lift a low CF score into the rescue band. */
-export const DINO_STRONG_RESCUE_MIN = 0.96;
+export const DINO_STRONG_RESCUE_MIN = 0.90;
 /** DINO must be this confident to lift CF in the normal uncertain band. */
 export const DINO_RESCUE_MIN = 0.70;
 /**
@@ -18,12 +18,14 @@ export const DINO_RESCUE_MIN = 0.70;
  * faintly awake AND DINO is saturated. CF emits hard zeros on real photos
  * it is certain about, while AI images in its blind spots still elicit a
  * faint response, so "CF flatlined" is itself evidence of a real photo.
- * Derived on the Pillow-path bench with a 240-image stock/catalog stress
- * guard (zero stress regression allowed); see PR for the measurement.
+ * Bands re-derived for the hard-negative probe (trained with stock,
+ * catalog, product, and interior reals) on the Pillow-path bench under a
+ * 240-image stress guard; a deliberately conservative near-optimum was
+ * chosen over the grid maximum. See PR for the measurement.
  */
-export const DINO_SUBFLOOR_CF_MIN = 0.005;
+export const DINO_SUBFLOOR_CF_MIN = 0.0005;
 /** DINO saturation required for the sub-floor rescue. */
-export const DINO_SUBFLOOR_MIN = 0.999;
+export const DINO_SUBFLOOR_MIN = 0.995;
 export const URL_HINT_MAX_BOOST = 0.05;
 
 /**
