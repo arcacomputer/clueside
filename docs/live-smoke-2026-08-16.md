@@ -73,6 +73,16 @@ So the trigger is the live processing chain plus the current content distributio
 5. Fix the offline update ping.
 6. Re-run the full smoke. The bounty claim stays on hold until it passes.
 
+## Update, 2026-08-16 (same day): the fix, measured
+
+The work-in-progress list above is done. Findings and results:
+
+- **Unsplash exposes no AI label anywhere.** We audited the full API surface, page HTML, frontend bundles, tags, and image bytes for 268 current editorial photos: no labeling mechanism exists as served. Ground truth via platform labels is impossible; we fell back to camera EXIF present in the API metadata (184 of 268 photos) as a probable-real prior, and imgix strips all embedded provenance metadata from served bytes, which also means metadata-based detection layers are inert on CDN images.
+- **True FP rate of v1.2.0 on probable-real live bytes: 9.2 percent** (17 of 184 camera-EXIF photos, identical in AVIF and JPEG form). The no-EXIF segment flagged at a similar rate, so the smoke's headline 24.3 percent was inflated by page mix and feed rotation, not primarily by hidden AI content.
+- **The fix** (three coordinated changes, shipped together): a view-agreement rule (a lone CommunityForensics view in [0.65, 0.85) cannot carry an AI verdict and falls back to the runner-up view; views at or above 0.85 keep single-view authority), the probe retrained with 118 verified-real live CDN images, and the strong rescue tier tightened to [0.02, 0.20) with DINO at or above 0.96.
+- **Verified with the implemented pipeline:** public bench 87.9 percent BA, 76.0 TPR, 99.8 TNR; stress set 3 of 240; held-out live-CDN guard 4 of 132 (3.0 percent, versus 9.2 percent for v1.2.0 on identical bytes). The live guard is now a permanent part of the evaluation gate next to the bench and stress sets, and the trade (2.6 bench points for a threefold live FP reduction) is deliberate: false positives on real photos are the failure that matters.
+- A full live smoke rerun of the fixed build is the next gate. No claim before it passes.
+
 ## How to help
 
 - Reproduce any number here: `npm ci && npm run fetch-model`, then `npm run eval -- <dir>` on any labeled folder of images. The harness matches the extension byte for byte.

@@ -32,7 +32,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 - **Manifest V3.** `onnxruntime-web` in an offscreen document. WebGPU with WASM fallback (probe the adapter; do not latch a WebGPU error).
 - **Auto-scan ordinary webpages.** Confidence on every badge: AI / OK / uncertain.
 - **Hybrid is allowed:** neural + C2PA + EXIF/XMP + PNG/JPEG comments + weak URL hints. A URL hint alone must not cross 0.65.
-- **Current fusion: CF-primary, three tiers.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views. CF is authoritative at >= 0.65. Sub-floor tier: below CF 0.02, rescue only when CF >= 0.0005 (not flatlined) AND DINO >= 0.995; a CF hard zero is never overridden. Strong tier: CF in [0.02, 0.10) needs DINO >= 0.90. Normal tier: CF in [0.10, 0.65) needs DINO >= 0.70. The flat-graphic gate blocks every rescue tier on catalog art and UI-like images. Bands were re-derived for the hard-negative probe under a hard stress-set constraint (240 full-resolution stock/catalog/product reals; no DINO-attributable stress FP allowed), choosing a conservative near-optimum over the grid maximum. **Do not restore raw max(CF, DINO), remove the graphic gate, or loosen these bands without rerunning the bench plus the stress set and live-site checks.**
+- **Current fusion: CF-primary, three tiers plus view agreement.** CommunityForensics TTA takes the maximum raw sigmoid from inspected views, with one rule: a lone view in [0.65, 0.85) does not carry an AI verdict and falls back to the runner-up (live CDN-processed real photos spike single crops); views >= 0.85 keep single-view authority and early-exit. The adaptive extras band is [0.15, 0.85). CF is authoritative at >= 0.65 after agreement. Sub-floor tier: below CF 0.02, rescue only when CF >= 0.0005 AND DINO >= 0.995. Strong tier: CF in [0.02, 0.20) needs DINO >= 0.96. Normal tier: CF in [0.20, 0.65) needs DINO >= 0.70. The flat-graphic gate blocks every rescue tier. Bands derived under three simultaneous guards: public bench, 240-image stress set, and a held-out live-CDN guard (camera-EXIF-verified Unsplash variants). **Do not restore plain max(CF, DINO), remove the graphic gate or the agreement rule, or loosen these bands without rerunning the bench, the stress set, AND the live guard.**
 - **Overlay:** badge store must be an iterable `Map`, not a `WeakMap`. Reposition on scroll / resize / `visualViewport` / mutations. Never wrap images.
 - **Load-unpacked users do not auto-update.** GitHub Releases zip + popup banner is the update path. Do not assume CWS.
 - **Cross-device:** macOS (owner), Windows, Linux. WASM must work when WebGPU has no adapter.
@@ -65,7 +65,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 
 | File | Role |
 |---|---|
-| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.02, `DINO_STRONG_RESCUE_FLOOR` 0.10, `DINO_STRONG_RESCUE_MIN` 0.90, `DINO_RESCUE_MIN` 0.70, `DINO_SUBFLOOR_CF_MIN` 0.0005, `DINO_SUBFLOOR_MIN` 0.995, CF-primary `fuseNeuralScores` |
+| `src/fuse.js` | `DEFAULT_THRESHOLD` 0.65, `DINO_CF_FLOOR` 0.02, `DINO_STRONG_RESCUE_FLOOR` 0.20, `DINO_STRONG_RESCUE_MIN` 0.96, `DINO_RESCUE_MIN` 0.70, `DINO_SUBFLOOR_CF_MIN` 0.0005, `DINO_SUBFLOOR_MIN` 0.995, CF-primary `fuseNeuralScores` |
 | `src/graphic-gate.js` | Shared flat-graphic policy for browser and Node evaluation |
 | `src/pixel-resize.js` | Pillow-exact bicubic resize shared by the extension and the Node harness for the CF path (byte-exact vs Pillow 12.3.0 goldens) |
 | `src/offscreen.js` | ORT WebGPU/WASM, DINO 224 then CF TTA |
@@ -76,7 +76,7 @@ Win POIDH Arbitrum bounty 323 by shipping a privacy-first local MV3 Chrome exten
 | `src/c2pa-reader.js` | C2PA reader |
 
 - Issue 23 (fixed in PR 24 / v1.0.7): overlay WeakMap drift + DINO max false positives.
-- The public 893-image fixture with the hard-negative probe and re-derived bands: 90.5% BA, 81.2% TPR, 99.8% TNR (harness-verified, not simulated). Stress set (240 full-resolution stock/catalog/product reals): 4 FPs, all CF-driven at >= 0.65 where CF is authoritative by design; zero DINO-attributable stress FPs (shipped v1.1.0 measured 7 on identical bytes). The DINO probe is trained on features from the shared Pillow-exact path plus 1,915 hard-negative reals (stock, catalog, product, interiors; rows disjoint from the stress set). Full-resolution professional stock photos can spike CF itself; check exactly that during live smoke. Live-smoke checks still remain required before any claim.
+- The public 893-image fixture with the live-guarded policy: 87.9% BA, 76.0% TPR, 99.8% TNR (harness-verified, adaptive mode, implemented view-agreement path). Stress set: 3 FPs in 240 images. Live-CDN guard (132 held-out camera-EXIF Unsplash variants, AVIF plus JPEG): 4 FPs, 3.0%, vs 9.2% for v1.2.0 on identical bytes. Probe trained with 118 verified-real live CDN images on top of the prior hard negatives. See docs/live-smoke-2026-08-16.md for the failure that drove this and the full isolation work. Live-smoke rerun still required before any claim.
 
 ---
 
