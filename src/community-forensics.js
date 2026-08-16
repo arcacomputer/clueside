@@ -11,6 +11,7 @@ import {
   aggregateViewScores,
   shouldRunExtraCrops,
   TTA_EARLY_EXIT,
+  agreedMax,
 } from './scoring.js';
 
 const REQUIRED_WASM_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
@@ -182,7 +183,9 @@ export async function predictAdaptiveViews(session, views, options = {}) {
     }
   }
 
-  return { scores, named, neuralPAi: max, extraRan: true, earlyExit: false };
+  // Mid-band agreement: a lone view in [threshold, earlyExit) does not
+  // carry the verdict on its own (see scoring.agreedMax).
+  return { scores, named, neuralPAi: agreedMax(max, scores), extraRan: true, earlyExit: false };
 }
 
 /**

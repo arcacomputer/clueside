@@ -126,7 +126,7 @@ describe('fuseNeuralScores', () => {
 
   it('only rescues low CF scores with near-saturated DINO', () => {
     assert.equal(fuseNeuralScores(0.05, 0.99), 0.99);
-    assert.equal(fuseNeuralScores(0.05, 0.89), 0.05);
+    assert.equal(fuseNeuralScores(0.05, 0.95), 0.05);
     assert.equal(fuseNeuralScores(0.25, 0.75), 0.75);
     assert.equal(fuseNeuralScores(0.25, 0.65), 0.25);
     // Sub-floor tier: faintly awake CF plus saturated DINO rescues.

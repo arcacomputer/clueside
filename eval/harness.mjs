@@ -30,7 +30,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
+const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif']);
 const AI_DIR_NAMES = new Set(['ai', 'fake', 'generated', 'synthetic']);
 const REAL_DIR_NAMES = new Set(['real', 'authentic', 'photo', 'natural']);
 

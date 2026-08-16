@@ -23,7 +23,7 @@ import { RawImage } from '@huggingface/transformers';
 import sharp from 'sharp';
 import ort from 'onnxruntime-node';
 
-const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp']);
+const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.avif']);
 const AI_DIR_NAMES = new Set(['ai', 'fake', 'generated', 'synthetic']);
 const REAL_DIR_NAMES = new Set(['real', 'authentic', 'photo', 'natural']);
 

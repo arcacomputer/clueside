@@ -22,8 +22,16 @@ describe('offline product policy mirror', () => {
   });
 
   it('does not let DINO replace a production CF score already at 0.65', () => {
+    // Two agreeing views keep CF authoritative at or above the threshold.
+    const rec = { views: { center: 0.65, tl: 0.66 } };
+    assert.equal(productFloorScore(rec, 0.99, 0.4), 0.66);
+  });
+
+  it('a lone mid-band CF view falls back to the runner-up', () => {
     const rec = { views: { center: 0.65, tl: 0.2 } };
-    assert.equal(productFloorScore(rec, 0.99, 0.4), 0.65);
+    // The agreement rule drops the lone 0.65 to the 0.2 runner-up, which
+    // sits below this helper's 0.4 rescue floor, so CF stands at 0.2.
+    assert.equal(productFloorScore(rec, 0.99, 0.4), 0.2);
   });
 
   it('mirrors the flat-graphic suppression when sweep records include the gate', () => {
