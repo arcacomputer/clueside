@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import pkg from '../../../package.json';
+import bench from '../../../eval/benchmark-results.json';
 ---
 
 <BaseLayout
@@ -138,19 +139,19 @@ import pkg from '../../../package.json';
       <header class="section-heading evidence-heading">
         <p class="kicker">03 / Public evidence</p>
         <h2>Measured in the open.<br>Caveated in public.</h2>
-        <p>The shipped policy is measured on a public, reproducible 893-image benchmark through the same byte-exact preprocessing the extension runs, plus a 240-image stock and catalog stress set that guards real-photo false positives. A higher-scoring legacy raw-max policy is not shipped because its live false positives were unacceptable. None of these numbers are a claim about POIDH's private evaluation set.</p>
+        <p>The shipped policy is measured on a public, reproducible {bench.bench.n}-image benchmark through the same byte-exact preprocessing the extension runs, plus a {bench.stress.n}-image stock and catalog stress set that guards real-photo false positives. A higher-scoring legacy raw-max policy is not shipped because its live false positives were unacceptable. None of these numbers are a claim about POIDH's private evaluation set.</p>
       </header>
       <div class="metric-ledger">
         <div class="metric-main">
           <span class="metric-label">Shipped balanced accuracy</span>
-          <strong>90.5<span>%</span></strong>
+          <strong>{bench.bench.ba}<span>%</span></strong>
           <p>raw 0.65 · v{pkg.version} · harness verified</p>
         </div>
         <dl>
-          <div><dt>Current policy</dt><dd>90.5%</dd><dd class="metric-detail">TPR 81.2% · TNR 99.8% · raw 0.65</dd></div>
-          <div><dt>Real-photo pass</dt><dd>99.8%</dd><dd class="metric-detail">1 false positive in 484 reals</dd></div>
-          <div><dt>Legacy raw max</dt><dd>96.1%</dd><dd class="metric-detail">Not shipped · public fixture</dd></div>
-          <div><dt>Public samples</dt><dd>893</dd><dd class="metric-detail">409 AI · 484 real</dd></div>
+          <div><dt>Current policy</dt><dd>{bench.bench.ba}%</dd><dd class="metric-detail">TPR {bench.bench.tpr}% · TNR {bench.bench.tnr}% · raw 0.65</dd></div>
+          <div><dt>Real-photo pass</dt><dd>{bench.bench.tnr}%</dd><dd class="metric-detail">{bench.bench.falsePositives} false positive in {bench.bench.real} reals</dd></div>
+          <div><dt>Legacy raw max</dt><dd>{bench.legacyRawMax.ba}%</dd><dd class="metric-detail">Not shipped · public fixture</dd></div>
+          <div><dt>Public samples</dt><dd>{bench.bench.n}</dd><dd class="metric-detail">{bench.bench.ai} AI · {bench.bench.real} real</dd></div>
         </dl>
       </div>
       <div class="source-strip">
