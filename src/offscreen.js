@@ -35,6 +35,13 @@ import {
   normalizeTtaMode,
   runExclusiveAfterStart,
 } from './analyze-queue.js';
+import {
+  createWebGpuHealth,
+  isWebGpuDeviceError,
+  isWedgeError,
+  shouldFallBackToWasm,
+  wrapSessionWithWatchdog,
+} from './webgpu-watchdog.js';
 
 const HF_FILES = [MODEL_ONNX_PATH, 'preprocessor_config.json', 'config.json'];
 const PROBE_URL_PATH = 'models/probe/dino-probe.json';
@@ -47,6 +54,15 @@ let initError = null;
 let sessionPromise = null;
 let threshold = DEFAULT_THRESHOLD;
 const inferLock = createExclusiveLock();
+
+// Runtime WebGPU recovery (live smoke of v1.3.1: a wedged WebGPU run under
+// GPU contention left 104 badges pending). One-way for the lifetime of this
+// offscreen document: once WebGPU wedges or the device is lost, both
+// sessions are rebuilt on WASM and never flap back.
+const webGpuHealth = createWebGpuHealth();
+let rawCfSession = null;
+let rawDinoSession = null;
+let wasmFallbackPromise = null;
 
 /**
  * Multithreaded WASM needs SharedArrayBuffer, which needs the COOP/COEP
@@ -93,14 +109,37 @@ async function tryCreateDinoHead() {
       })
     );
 
-    dinoSession = created;
+    rawDinoSession = created;
+    dinoSession = sessionDevice === 'webgpu' ? wrapSessionWithWatchdog(created) : created;
     dinoProbe = probe;
     console.log('DINOv2 probe head ready');
   } catch (err) {
     console.debug('DINOv2 head unavailable, running CommunityForensics only:', err?.message || err);
+    rawDinoSession = null;
     dinoSession = null;
     dinoProbe = null;
   }
+}
+
+/**
+ * GPUDevice.lost resolves (it never rejects) when the device goes away.
+ * onnxruntime-web keeps one shared device on ort.env.webgpu after a WebGPU
+ * session exists. Marking the latch here means the next analyze rebuilds on
+ * WASM before it ever starts another WebGPU run.
+ */
+function watchGpuDeviceLoss() {
+  let lost;
+  try {
+    lost = ort.env?.webgpu?.device?.lost;
+  } catch {
+    return;
+  }
+  if (typeof lost?.then !== 'function') return;
+  lost
+    .then((info) => {
+      webGpuHealth.markUnhealthy(`GPUDevice lost (${info?.reason || 'unknown'})`);
+    })
+    .catch(() => {});
 }
 
 async function ensureSession() {
@@ -117,20 +156,23 @@ async function ensureSession() {
     }
 
     const modelUrl = chrome.runtime.getURL(`models/${MODEL_ID}/${MODEL_ONNX_PATH}`);
-    const adapter = await probeWebGpuAdapter();
+    const adapter = webGpuHealth.isUnhealthy() ? null : await probeWebGpuAdapter();
     const created = await createCommunityForensicsSession({
       modelUrl,
       wasmPaths: chrome.runtime.getURL('lib/'),
-      preferWebGpu: Boolean(adapter),
+      preferWebGpu: Boolean(adapter) && !webGpuHealth.isUnhealthy(),
       numThreads: wasmThreadCount(),
     });
 
-    session = created.session;
+    rawCfSession = created.session;
     sessionDevice = created.device;
+    session =
+      created.device === 'webgpu' ? wrapSessionWithWatchdog(created.session) : created.session;
+    if (created.device === 'webgpu') watchGpuDeviceLoss();
 
     await tryCreateDinoHead();
 
-    return created;
+    return { session, device: sessionDevice };
   })();
 
   try {
@@ -140,6 +182,52 @@ async function ensureSession() {
     sessionPromise = null;
     throw err;
   }
+}
+
+/**
+ * One-way WebGPU to WASM fallback. Disposes both (possibly wedged) sessions
+ * without awaiting them, rebuilds both on the WASM execution provider, and
+ * logs the switch exactly once. The caller retries the in-flight image;
+ * everything still waiting behind the inference lock or in the page queue
+ * simply runs on the rebuilt WASM sessions. There is no path back to WebGPU
+ * until the offscreen document restarts.
+ * @param {string} reason
+ */
+function fallbackToWasm(reason) {
+  if (wasmFallbackPromise) return wasmFallbackPromise;
+
+  webGpuHealth.markUnhealthy(reason);
+  console.warn(
+    `Clueside: WebGPU backend unhealthy (${webGpuHealth.reason()}). ` +
+      'Rebuilding both model sessions on WASM for the rest of this browser session.'
+  );
+
+  wasmFallbackPromise = (async () => {
+    // Fire-and-forget disposal: release on a wedged device can itself hang.
+    try {
+      Promise.resolve(rawCfSession?.release?.()).catch(() => {});
+    } catch {
+      // Session already unusable.
+    }
+    try {
+      Promise.resolve(rawDinoSession?.release?.()).catch(() => {});
+    } catch {
+      // Session already unusable.
+    }
+
+    session = null;
+    rawCfSession = null;
+    dinoSession = null;
+    rawDinoSession = null;
+    dinoProbe = null;
+    sessionDevice = 'wasm';
+    sessionPromise = null;
+    initError = null;
+
+    await ensureSession();
+  })();
+
+  return wasmFallbackPromise;
 }
 
 /**
@@ -154,6 +242,11 @@ async function dinoScore(bitmap) {
     const outputs = await dinoSession.run({ [DINO_INPUT_NAME]: input });
     return dinoScoreHiddenState(outputs.last_hidden_state, dinoProbe);
   } catch (err) {
+    if (sessionDevice === 'webgpu' && (isWedgeError(err) || isWebGpuDeviceError(err))) {
+      // Do not silently degrade to CF-only on a wedged backend: let the
+      // caller run the WASM fallback and rescore with both heads.
+      throw err;
+    }
     console.debug('DINO head inference failed:', err?.message || err);
     return null;
   }
@@ -218,6 +311,67 @@ async function resolveImageBytes(message) {
   throw new Error('No image bytes received (missing bufferB64 and non-http URL)');
 }
 
+/**
+ * One neural pass (graphic gate + DINO + CF) on whatever backend is current.
+ * @param {ArrayBuffer} bytes
+ * @param {'adaptive'|'always'|'center'} mode
+ * @returns {Promise<{ cfPAi: number, dinoPAi: number|null, graphicGate: boolean }>}
+ */
+async function scoreImageOnce(bytes, mode) {
+  const { session: activeSession } = await ensureSession();
+  const mime = sniffMime(bytes);
+  const blob = new Blob([bytes], { type: mime });
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const graphicGate = analyzeGraphicGate(bitmap).isGraphic;
+    const dinoPAi = await dinoScore(bitmap);
+
+    let cfPAi;
+    if (mode === 'center') {
+      const chw = await preprocessBitmap(bitmap);
+      cfPAi = await predictCHW(activeSession, chw);
+    } else {
+      const views = await preprocessBitmapViews(bitmap);
+      const effectiveMode = effectiveTtaMode(mode, dinoPAi);
+      cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
+    }
+
+    return { cfPAi, dinoPAi, graphicGate };
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Neural scoring with the runtime WebGPU escape hatch. If a run wedges past
+ * MODEL_RUN_WEDGE_TIMEOUT_MS or throws a device-level WebGPU error, fall back
+ * to WASM once and rescore this same image there. An error after the WASM
+ * retry propagates to the caller so the badge gets its normal error state
+ * instead of staying pending forever.
+ * @param {ArrayBuffer} bytes
+ * @param {'adaptive'|'always'|'center'} mode
+ */
+async function scoreImageWithFallback(bytes, mode) {
+  if (sessionDevice === 'webgpu' && webGpuHealth.isUnhealthy()) {
+    // Device loss reported between runs: rebuild before starting another
+    // WebGPU run.
+    await fallbackToWasm(webGpuHealth.reason());
+  }
+
+  try {
+    return await scoreImageOnce(bytes, mode);
+  } catch (err) {
+    const fallBack = shouldFallBackToWasm({
+      device: sessionDevice,
+      error: err,
+      alreadyFellBack: Boolean(wasmFallbackPromise),
+    });
+    if (!fallBack) throw err;
+    await fallbackToWasm(err?.message || String(err));
+    return scoreImageOnce(bytes, mode);
+  }
+}
+
 async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   const bytes = toArrayBuffer(rawBytes);
   const heuristics = await analyzeHeuristics(bytes, url);
@@ -228,32 +382,13 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   let modelError = null;
 
   try {
-    const { session: activeSession } = await ensureSession();
-    const mime = sniffMime(bytes);
-    const blob = new Blob([bytes], { type: mime });
-    const bitmap = await createImageBitmap(blob);
-    try {
-      const graphicGate = analyzeGraphicGate(bitmap).isGraphic;
-      const dinoPAi = await dinoScore(bitmap);
+    const { cfPAi, dinoPAi, graphicGate } = await scoreImageWithFallback(bytes, mode);
 
-      let cfPAi;
-      if (mode === 'center') {
-        const chw = await preprocessBitmap(bitmap);
-        cfPAi = await predictCHW(activeSession, chw);
-      } else {
-        const views = await preprocessBitmapViews(bitmap);
-        const effectiveMode = effectiveTtaMode(mode, dinoPAi);
-        cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
-      }
-
-      fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold, {
-        graphicGate,
-      });
-      if (graphicGate && cfPAi < DEFAULT_THRESHOLD) {
-        fused.reasons.push('Flat graphic gate: DINO lift suppressed');
-      }
-    } finally {
-      bitmap.close();
+    fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold, {
+      graphicGate,
+    });
+    if (graphicGate && cfPAi < DEFAULT_THRESHOLD) {
+      fused.reasons.push('Flat graphic gate: DINO lift suppressed');
     }
   } catch (err) {
     modelError = err.message || String(err);
