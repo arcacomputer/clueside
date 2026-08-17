@@ -55,10 +55,11 @@ describe('adaptive TTA fusion', () => {
     assert.equal(agreed.neuralPAi, 0.72);
   });
 
-  it('includes the low band edge 0.15 through the mid band, excludes 0.85', () => {
+  it('includes the low band edge 0.15 through the mid band, excludes 0.95', () => {
     assert.equal(shouldRunExtraCrops(TTA_ADAPTIVE_LOW), true);
     assert.equal(shouldRunExtraCrops(DEFAULT_THRESHOLD), true);
     assert.equal(shouldRunExtraCrops(0.84), true);
+    assert.equal(shouldRunExtraCrops(0.94), true);
     assert.equal(shouldRunExtraCrops(TTA_EARLY_EXIT), false);
     assert.equal(shouldRunExtraCrops(0.149), false);
   });
@@ -77,9 +78,17 @@ describe('adaptive TTA fusion', () => {
     assert.equal(folded.neuralPAi, 0.7);
   });
 
-  it('a single view at or above 0.85 keeps full authority', () => {
+  it('a lone 0.86 view no longer early-exits; agreement falls back', () => {
+    // Live Unsplash editorial photos land in 0.81-0.94. A single crop
+    // there is the CDN-spike pattern, not enough for an AI verdict.
     const folded = foldTtaScores([0.3, 0.86], { mode: 'always' });
-    assert.equal(folded.neuralPAi, 0.86);
+    assert.equal(folded.neuralPAi, 0.3);
+    assert.equal(folded.earlyExit, false);
+  });
+
+  it('a single view at or above 0.95 keeps full authority', () => {
+    const folded = foldTtaScores([0.3, 0.96], { mode: 'always' });
+    assert.equal(folded.neuralPAi, 0.96);
     assert.equal(folded.earlyExit, true);
   });
 
@@ -89,11 +98,17 @@ describe('adaptive TTA fusion', () => {
     assert.equal(folded.extraRan, false);
   });
 
-  it('early-exits at 0.9 without stretching remaining scores', () => {
+  it('early-exits at 0.95 without stretching remaining scores', () => {
     const folded = foldTtaScores([0.4, TTA_EARLY_EXIT, 0.99], { mode: 'adaptive' });
     assert.equal(folded.neuralPAi, TTA_EARLY_EXIT);
     assert.equal(folded.earlyExit, true);
     assert.deepEqual(folded.used, [0.4, TTA_EARLY_EXIT]);
+  });
+
+  it('does not remap a mid-band CDN spike to 0.65', () => {
+    const folded = foldTtaScores([0.81, 0.12, 0.08], { mode: 'adaptive' });
+    assert.equal(folded.neuralPAi, 0.12);
+    assert.ok(folded.neuralPAi < DEFAULT_THRESHOLD);
   });
 
   it('does not remap 0.20 to 0.65', () => {

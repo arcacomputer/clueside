@@ -10,6 +10,8 @@ inputs and score decisions come from the same source modules.
 All of these are dev-only and never ship in the extension:
 
 - `fetch-bench.mjs <dir>` — build a labeled eval bench from public HF datasets (modern AI gens + diverse reals), file names prefixed by source.
+- `fetch-live-guard.mjs <dir>` — small held-out Unsplash CDN + product + public-AI stand-in when the published fixtures are absent.
+- `compare-tta-policy.mjs <sweep.jsonl>` — compare load-shed, v1.3.2 early-exit 0.85, and production early-exit 0.95 at raw 0.65.
 - `degrade.mjs <in> <out>` — web-realistic copies (max 800px, JPEG q78) via macOS `sips`.
 - `sweep.mjs <dir> <out.jsonl>` — score every TTA view per image with onnxruntime-node (no early exit) for offline policy simulation.
 - `analyze.mjs <sweep.jsonl> [--dino=scores.jsonl]` — simulate TTA policies / thresholds / ensembles, report BA/TPR/TNR per source.
@@ -76,9 +78,14 @@ Output:
 - Preprocess: resize shortest edge 440, 384 center + corners, plus a 512 center crop, CLIP mean/std (values from upstream `preprocessor_config.json`). Crops are taken on the resized full image, not on an already-cropped 384 square.
 - TTA (default `--tta=adaptive`): DINO at `>= 0.15` expands CF scoring to all
   views. Otherwise extra CF crops run when the official 440 center p(AI) is in
-  `[0.15, 0.85)`. Production CF takes the maximum raw sigmoid from inspected
-  views, with view agreement: a lone view in `[0.65, 0.85)` falls back to the
-  runner-up. Inference stops when any inspected crop reaches `>= 0.85`.
+  `[0.15, 0.95)`. Production CF takes the maximum raw sigmoid from inspected
+  views, with view agreement: a lone view in `[0.65, 0.95)` falls back to the
+  runner-up. Inference stops when any inspected crop reaches `>= 0.95`.
+  The extension page queue never sheds this path to center-only.
+- `fetch-live-guard.mjs <dir>` — small held-out Unsplash CDN + product +
+  public-AI stand-in. The published 893/240/132/100 fixtures are not in git.
+- `compare-tta-policy.mjs <sweep.jsonl>` — load-shed vs v1.3.2 early-exit
+  0.85 vs production early-exit 0.95, still at raw 0.65.
 - Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
 - Neural fusion: CF-primary. CF wins below `0.02` and at or above `0.65`;
   between `0.02` and `0.20` DINO may only lift when near-saturated (`>= 0.96`);

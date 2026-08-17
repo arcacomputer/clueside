@@ -134,7 +134,7 @@ export async function predictViews(session, views) {
 /**
  * Production TTA: official 440 center first. Extra crops (440 corners + 512
  * center) run only in the adaptive band, or when mode is `always`. Stops if
- * any sigmoid is >= 0.9. Does not stretch scores.
+ * any sigmoid is >= TTA_EARLY_EXIT (0.95). Does not stretch scores.
  *
  * @param {ort.InferenceSession} session
  * @param {Array<{name: string, chw: Float32Array}>} views
