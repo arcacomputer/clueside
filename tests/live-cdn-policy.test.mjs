@@ -72,4 +72,23 @@ describe('live CDN false-positive policy', () => {
     assert.equal(productCfScore(rec, null), 0.99);
     assert.ok(productRawScore(rec, null) >= DEFAULT_THRESHOLD);
   });
+
+  it('does not let a middling DINO rescue re-flag a disagreed CF spike', () => {
+    // livecdn-121: center 0.90, extras low, DINO 0.76. v1.3.2 early-exit
+    // would have called AI on CF alone. After fallback, DINO 0.76 must
+    // not paint the runner-up as 65%.
+    const rec = {
+      views: { center: 0.902, tl: 0.104, tr: 0.032, bl: 0.005, br: 0.194, center_512: 0.399 },
+      ...noHeur,
+    };
+    assert.ok(productCfScore(rec, 0.76) < DEFAULT_THRESHOLD);
+    assert.ok(productRawScore(rec, 0.76) < DEFAULT_THRESHOLD);
+    assert.ok(productRawScore(rec, 0.97) >= DEFAULT_THRESHOLD);
+  });
+
+  it('still lets saturated DINO rescue a lone mid-band CF miss', () => {
+    const rec = { views: { center: 0.247, tl: 0.788, tr: 0.096 }, ...noHeur };
+    assert.ok(productCfScore(rec, 0.9997) < DEFAULT_THRESHOLD);
+    assert.ok(productRawScore(rec, 0.9997) >= DEFAULT_THRESHOLD);
+  });
 });

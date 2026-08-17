@@ -105,6 +105,7 @@ async function scoreFile(filePath, label) {
   const cfPAi = viewed.neuralPAi;
   const fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, DEFAULT_THRESHOLD, {
     graphicGate,
+    agreementFallback: viewed.agreementFallback === true,
   });
 
   return {

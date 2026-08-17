@@ -60,7 +60,10 @@ function scorePolicy(rec, earlyExit, centerOnly) {
     dino,
     heuristicSignalsForSweep(rec),
     DEFAULT_THRESHOLD,
-    { graphicGate: rec.graphicGate === true }
+    {
+      graphicGate: rec.graphicGate === true,
+      agreementFallback: folded.agreementFallback === true,
+    }
   );
   return {
     raw: fused.rawScore,

@@ -12,6 +12,7 @@ import {
   shouldRunExtraCrops,
   TTA_EARLY_EXIT,
   agreedMax,
+  DEFAULT_THRESHOLD,
 } from './scoring.js';
 
 const REQUIRED_WASM_FILES = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
@@ -151,6 +152,7 @@ export async function predictAdaptiveViews(session, views, options = {}) {
       neuralPAi: 0.5,
       extraRan: false,
       earlyExit: false,
+      agreementFallback: false,
     };
   }
 
@@ -162,14 +164,28 @@ export async function predictAdaptiveViews(session, views, options = {}) {
   named.push({ name: views[0].name, score: centerScore });
 
   if (centerScore >= earlyExit) {
-    return { scores, named, neuralPAi: centerScore, extraRan: false, earlyExit: true };
+    return {
+      scores,
+      named,
+      neuralPAi: centerScore,
+      extraRan: false,
+      earlyExit: true,
+      agreementFallback: false,
+    };
   }
 
   const runExtra =
     mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(centerScore));
 
   if (!runExtra) {
-    return { scores, named, neuralPAi: centerScore, extraRan: false, earlyExit: false };
+    return {
+      scores,
+      named,
+      neuralPAi: centerScore,
+      extraRan: false,
+      earlyExit: false,
+      agreementFallback: false,
+    };
   }
 
   let max = centerScore;
@@ -179,13 +195,21 @@ export async function predictAdaptiveViews(session, views, options = {}) {
     named.push({ name: views[i].name, score });
     if (score > max) max = score;
     if (score >= earlyExit) {
-      return { scores, named, neuralPAi: max, extraRan: true, earlyExit: true };
+      return { scores, named, neuralPAi: max, extraRan: true, earlyExit: true, agreementFallback: false };
     }
   }
 
   // Mid-band agreement: a lone view in [threshold, earlyExit) does not
   // carry the verdict on its own (see scoring.agreedMax).
-  return { scores, named, neuralPAi: agreedMax(max, scores), extraRan: true, earlyExit: false };
+  const neuralPAi = agreedMax(max, scores);
+  return {
+    scores,
+    named,
+    neuralPAi,
+    extraRan: true,
+    earlyExit: false,
+    agreementFallback: neuralPAi < max && max >= DEFAULT_THRESHOLD,
+  };
 }
 
 /**

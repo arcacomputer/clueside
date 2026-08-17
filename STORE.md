@@ -27,9 +27,10 @@ How it works
   between 20% and 65% DINO may lift at >= 70%. A flat-graphic guard prevents
   DINO from overriding CF on catalog art and UI-like images. CommunityForensics
   TTA uses the maximum raw sigmoid from inspected crops, with view
-  agreement: a lone crop in [65%, 95%) falls back to the runner-up. The
-  page queue never sheds TTA to center-only. The decision threshold is
-  raw 65% p(AI), with no score remapping.
+  agreement: a lone crop in [65%, 95%) falls back to the runner-up, and
+  a middling DINO score cannot lift that fallback. The page queue never
+  sheds TTA to center-only. The decision threshold is raw 65% p(AI),
+  with no score remapping.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
 - Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 

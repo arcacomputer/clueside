@@ -86,21 +86,21 @@ export function foldTtaScores(scores, options = {}) {
   const earlyExit = options.earlyExit ?? TTA_EARLY_EXIT;
 
   if (!scores?.length) {
-    return { neuralPAi: 0.5, extraRan: false, earlyExit: false, used: [] };
+    return { neuralPAi: 0.5, extraRan: false, earlyExit: false, used: [], agreementFallback: false };
   }
 
   const center = clamp01(scores[0]);
   const used = [center];
 
   if (center >= earlyExit) {
-    return { neuralPAi: center, extraRan: false, earlyExit: true, used };
+    return { neuralPAi: center, extraRan: false, earlyExit: true, used, agreementFallback: false };
   }
 
   const runExtra =
     mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(center));
 
   if (!runExtra) {
-    return { neuralPAi: center, extraRan: false, earlyExit: false, used };
+    return { neuralPAi: center, extraRan: false, earlyExit: false, used, agreementFallback: false };
   }
 
   let max = center;
@@ -109,11 +109,18 @@ export function foldTtaScores(scores, options = {}) {
     used.push(v);
     if (v > max) max = v;
     if (v >= earlyExit) {
-      return { neuralPAi: max, extraRan: true, earlyExit: true, used };
+      return { neuralPAi: max, extraRan: true, earlyExit: true, used, agreementFallback: false };
     }
   }
 
-  return { neuralPAi: agreedMax(max, used, threshold), extraRan: true, earlyExit: false, used };
+  const neuralPAi = agreedMax(max, used, threshold);
+  return {
+    neuralPAi,
+    extraRan: true,
+    earlyExit: false,
+    used,
+    agreementFallback: neuralPAi < max && max >= threshold,
+  };
 }
 
 /**

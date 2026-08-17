@@ -81,7 +81,8 @@ Output:
   `[0.15, 0.95)`. Production CF takes the maximum raw sigmoid from inspected
   views, with view agreement: a lone view in `[0.65, 0.95)` falls back to the
   runner-up. Inference stops when any inspected crop reaches `>= 0.95`.
-  The extension page queue never sheds this path to center-only.
+  The extension page queue never sheds this path to center-only. After an
+  agreement fallback, DINO must be `>= 0.96` to lift again.
 - `fetch-live-guard.mjs <dir>` — small held-out Unsplash CDN + product +
   public-AI stand-in. The published 893/240/132/100 fixtures are not in git.
 - `compare-tta-policy.mjs <sweep.jsonl>` — load-shed vs v1.3.2 early-exit
@@ -89,7 +90,8 @@ Output:
 - Probe modes: `--tta=center` (official center only) and `--tta=always` (inspect extras regardless of the CF center band)
 - Neural fusion: CF-primary. CF wins below `0.02` and at or above `0.65`;
   between `0.02` and `0.20` DINO may only lift when near-saturated (`>= 0.96`);
-  between `0.20` and `0.65` DINO may lift at `>= 0.70`; below the `0.02` floor
+  between `0.20` and `0.65` DINO may lift at `>= 0.70`, except after a
+  view-agreement fallback, which still needs DINO `>= 0.96`; below the `0.02` floor
   a rescue additionally needs CF `>= 0.0005` and DINO `>= 0.995`. The same native-pixel
   flat-graphic gate used by the extension suppresses DINO lift on catalog art
   and UI-like images.

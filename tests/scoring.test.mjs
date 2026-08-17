@@ -108,6 +108,7 @@ describe('adaptive TTA fusion', () => {
   it('does not remap a mid-band CDN spike to 0.65', () => {
     const folded = foldTtaScores([0.81, 0.12, 0.08], { mode: 'adaptive' });
     assert.equal(folded.neuralPAi, 0.12);
+    assert.equal(folded.agreementFallback, true);
     assert.ok(folded.neuralPAi < DEFAULT_THRESHOLD);
   });
 

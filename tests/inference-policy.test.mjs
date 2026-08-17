@@ -50,6 +50,17 @@ describe('production inference policy', () => {
     assert.equal(fuseInferenceScores(0.45, 0.72, noSignals).rawScore, 0.72);
   });
 
+  it('blocks a middling DINO lift after CF agreement falls back', () => {
+    assert.equal(
+      fuseNeuralScores(0.4, 0.76, { agreementFallback: true }),
+      0.4
+    );
+    assert.equal(
+      fuseNeuralScores(0.4, 0.97, { agreementFallback: true }),
+      0.97
+    );
+  });
+
   it('does not suppress CF-confident AI illustrations on flat graphics', () => {
     assert.equal(fuseNeuralScores(0.72, 0.12, { graphicGate: true }), 0.72);
     assert.equal(

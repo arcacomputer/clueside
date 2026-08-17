@@ -11,18 +11,24 @@ export const PRODUCT_VIEW_ORDER = ['center', 'tl', 'tr', 'bl', 'br', 'center_512
  * @param {{views: Record<string, number>}} rec
  * @param {number|null|undefined} dino
  */
-export function productCfScore(rec, dino) {
+export function productFold(rec, dino) {
   const scores = PRODUCT_VIEW_ORDER
     .map((name) => rec.views[name])
     .filter((score) => score != null);
   const mode = effectiveTtaMode('adaptive', dino ?? null);
-  return foldTtaScores(scores, { mode }).neuralPAi;
+  return foldTtaScores(scores, { mode });
+}
+
+export function productCfScore(rec, dino) {
+  return productFold(rec, dino).neuralPAi;
 }
 
 /** Mirror the current production neural policy through shared source modules. */
 export function productNeuralScore(rec, dino) {
-  return fuseNeuralScores(productCfScore(rec, dino), dino ?? null, {
+  const folded = productFold(rec, dino);
+  return fuseNeuralScores(folded.neuralPAi, dino ?? null, {
     graphicGate: rec.graphicGate === true,
+    agreementFallback: folded.agreementFallback === true,
   });
 }
 
@@ -42,12 +48,16 @@ export function heuristicSignalsForSweep(rec) {
 
 /** Mirror the complete current raw score, including deterministic metadata. */
 export function productRawScore(rec, dino) {
+  const folded = productFold(rec, dino);
   return fuseInferenceScores(
-    productCfScore(rec, dino),
+    folded.neuralPAi,
     dino ?? null,
     heuristicSignalsForSweep(rec),
     DEFAULT_THRESHOLD,
-    { graphicGate: rec.graphicGate === true }
+    {
+      graphicGate: rec.graphicGate === true,
+      agreementFallback: folded.agreementFallback === true,
+    }
   ).rawScore;
 }
 

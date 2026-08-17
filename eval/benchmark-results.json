@@ -35,5 +35,17 @@
     "falsePositives": 3,
     "ratePercent": 3.0,
     "description": "Held-out IKEA and Amazon product-CDN images at grid and large variants; product marketing imagery counts as not generative AI for this detector. Two of three FPs are CF-driven."
+  },
+  "runnableLiveGuard": {
+    "measuredAt": "2026-08-17",
+    "n": 55,
+    "ai": 16,
+    "real": 39,
+    "description": "Held-out unsplash-lite rows 80-149 re-fetched as live imgix grid bytes (w=700 q=60 fit=crop fm=jpg), plus 16 DALL-E 3 images. Built with eval/fetch-live-guard.mjs. Product and Flux sources returned zero files in this checkout.",
+    "decisionRule": "raw fused p(AI) >= 0.65, no remapping",
+    "loadShed": { "fp": 2, "fn": 12, "tpr": "25.0", "tnr": "94.9", "ba": "59.9", "liveFp": 2, "liveRatePercent": 5.1 },
+    "v132": { "fp": 3, "fn": 9, "tpr": "43.8", "tnr": "92.3", "ba": "68.0", "liveFp": 3, "liveRatePercent": 7.7 },
+    "production": { "fp": 1, "fn": 9, "tpr": "43.8", "tnr": "97.4", "ba": "70.6", "liveFp": 1, "liveRatePercent": 2.6 },
+    "remainingFp": "livecdn-145: CF 0.020, DINO 0.994, existing strong-tier rescue. Not introduced by v1.3.3."
   }
 }
