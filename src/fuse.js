@@ -37,7 +37,7 @@ export const URL_HINT_MAX_BOOST = 0.05;
  * be saturated (>= DINO_SUBFLOOR_MIN).
  * @param {number} cfScore CommunityForensics p(AI) after TTA
  * @param {number|null} dinoScore DINOv2 probe p(AI), null if head unavailable
- * @param {{ graphicGate?: boolean }} [options]
+ * @param {{ graphicGate?: boolean, agreementFallback?: boolean }} [options]
  * @returns {number}
  */
 export function fuseNeuralScores(cfScore, dinoScore, options = {}) {
@@ -48,6 +48,11 @@ export function fuseNeuralScores(cfScore, dinoScore, options = {}) {
   if (cf >= DEFAULT_THRESHOLD) return cf;
 
   if (options.graphicGate) return cf;
+
+  // A disagreed CF spike is weak evidence. After agreement falls back,
+  // DINO must be near-saturated to lift again; a 0.76 probe on a 0.40
+  // runner-up is the livecdn-121 pattern (Unsplash editorial).
+  if (options.agreementFallback && dino < DINO_STRONG_RESCUE_MIN) return cf;
 
   if (cf < DINO_CF_FLOOR) {
     if (cf >= DINO_SUBFLOOR_CF_MIN && dino >= DINO_SUBFLOOR_MIN) {

@@ -8,17 +8,24 @@
 export const ANALYZE_CONCURRENCY = 2;
 
 /**
- * Pending count above this uses center crop only (no extra TTA views).
- * The DINO head always runs (one cheap 224 pass), and CF extra crops
- * are already gated on either head being suspicious, so a confident
- * real costs one CF pass + one DINO pass regardless of mode. Measured
- * on the local bench, shedding to center costs about 1 BA point
- * (ens-max 93.8 -> ens-max-center 92.6), so shed late.
+ * Historical load-shed cutoff. Adaptive already skips extras on confident
+ * reals (center < 0.15), so shedding to center-only only changed behavior
+ * when the center crop was suspicious: exactly the band where live CDN
+ * photos need extras for the agreement rule. Kept as a named constant so
+ * older tests and comments stay searchable; production no longer sheds.
  */
 export const TTA_SKIP_WHEN_PENDING_ABOVE = 12;
 
-export function ttaModeForLoad(pendingCount) {
-  return pendingCount > TTA_SKIP_WHEN_PENDING_ABOVE ? 'center' : 'adaptive';
+/**
+ * Always adaptive. A busy Unsplash masonry (26+ badges) used to force
+ * center-only on the first ~14 images, which disabled view agreement and
+ * let a lone 0.81-0.94 center crop become the AI verdict. Adaptive already
+ * costs two passes on confident reals; extras run only when a head is
+ * suspicious.
+ * @param {number} [_pendingCount]
+ */
+export function ttaModeForLoad(_pendingCount) {
+  return 'adaptive';
 }
 
 export function normalizeTtaMode(mode) {

@@ -107,3 +107,24 @@ The fix (v1.3.2): a watchdog around every model run with a 20 second wedge timeo
 - Recipes for labeled, redistributable live-CDN image corpora (real photography served through imgix, Cloudinary, or similar chains) would directly improve the guard sets.
 
 All numbers in this document come from runs on 2026-08-16; versions are stated inline (v1.2.0 baseline through the v1.3.2 fix). Nothing here is a claim about POIDH's private evaluation set.
+
+## Update, 2026-08-17: v1.3.2 live Unsplash still fails, and why the 3 percent guard missed it
+
+A later load of the public v1.3.2 release zip (WASM, no WebGPU) on the Unsplash featured feed scored 15 AI, 5 OK, and 6 uncertain out of 26 badges. Ordinary editorial photos (forest, boat on turquoise water, clouds, laptop) displayed AI 81-94 percent, with raw p(AI) equal to the neural score. Wikipedia photos stayed clean. thispersondoesnotexist.com stayed AI 100 percent.
+
+Two production behaviors explain the gap between that feed and the 3.0 percent held-out live-CDN guard:
+
+1. **Center-only load-shed.** `ttaModeForLoad` returned `center` when more than 12 images were pending. A 26-image masonry therefore scored the first ~14 images on the official 440 center crop alone. `agreedMax` never ran (`used.length < 2`). A lone 0.81-0.94 center crop became the verdict. The 132-image guard was scored with the harness default `--tta=adaptive`, so it never saw this path.
+2. **Early-exit at 0.85.** Even when adaptive TTA ran, a center crop of 0.85-0.94 stopped extras and kept single-view authority. The isolation boat-on-water example was already CF 0.84; the later featured-feed scores sit in the same band and above it.
+
+v1.3.3 does not remap 0.65. It keeps extras on busy pages (adaptive already skips extras on confident reals), raises `TTA_EARLY_EXIT` from 0.85 to 0.95 so a lone 0.81-0.94 crop must gather extras and survive agreement, and requires DINO `>= 0.96` to lift after that fallback.
+
+The published 893/240/132/100 fixtures are not in git. `eval/fetch-live-guard.mjs` built a stand-in in this checkout: 39 held-out unsplash-lite rows (80-149) re-fetched as live imgix grid JPEGs (`w=700 q=60 fit=crop`) plus 16 DALL-E 3 images. Product and Flux sources returned zero files. Offline comparison at raw 0.65 with the harness DINO scores:
+
+| Policy | Live-CDN FP | TPR (n=16 DALL-E 3) | BA (n=55) |
+|---|---:|---:|---:|
+| Load-shed (center only) | 2/39 (5.1%) | 25.0% | 59.9% |
+| v1.3.2 (early-exit 0.85) | 3/39 (7.7%) | 43.8% | 68.0% |
+| Production (early-exit 0.95 + fallback DINO gate) | 1/39 (2.6%) | 43.8% | 70.6% |
+
+The two v1.3.2-only live FPs were lone center spikes: livecdn-121 center 0.902 (runner-up 0.399) and livecdn-142 center 0.926 (runner-up 0.588). Production falls both back. The remaining production FP is livecdn-145 (CF 0.020, DINO 0.994), the existing strong-tier rescue, not introduced here. TPR on this 16-image DALL-E 3 set did not move. The 893-image bench was not re-scored. A full live Unsplash re-smoke of v1.3.3 has not been published.

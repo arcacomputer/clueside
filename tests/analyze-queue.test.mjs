@@ -23,13 +23,11 @@ function sleep(ms) {
 }
 
 describe('ttaModeForLoad', () => {
-  it('uses center crop when more than N images are pending', () => {
-    assert.equal(ttaModeForLoad(TTA_SKIP_WHEN_PENDING_ABOVE + 1), 'center');
-    assert.equal(ttaModeForLoad(40), 'center');
-  });
-
-  it('keeps adaptive TTA when the queue is short', () => {
-    assert.equal(ttaModeForLoad(TTA_SKIP_WHEN_PENDING_ABOVE), 'adaptive');
+  it('never sheds TTA to center-only, even on a busy masonry', () => {
+    // Unsplash featured feed queues 26+ images. Center-only disabled the
+    // agreement rule on the exact photos that need extras.
+    assert.equal(ttaModeForLoad(TTA_SKIP_WHEN_PENDING_ABOVE + 1), 'adaptive');
+    assert.equal(ttaModeForLoad(40), 'adaptive');
     assert.equal(ttaModeForLoad(1), 'adaptive');
     assert.equal(ttaModeForLoad(2), 'adaptive');
   });
@@ -66,7 +64,7 @@ describe('createAnalyzeQueue', () => {
     assert.equal(started.length, 5);
   });
 
-  it('passes center ttaMode while many jobs are still pending', async () => {
+  it('keeps adaptive ttaMode while many jobs are still pending', async () => {
     const modes = [];
     const queue = createAnalyzeQueue({
       run: async (item, meta) => {
@@ -82,11 +80,8 @@ describe('createAnalyzeQueue', () => {
 
     assert.equal(modes.length, jobCount);
     assert.equal(modes[0].pendingCount, jobCount);
-    assert.equal(modes[0].ttaMode, 'center');
     assert.ok(modes[0].pendingCount > TTA_SKIP_WHEN_PENDING_ABOVE);
-    const last = modes[modes.length - 1];
-    assert.equal(last.ttaMode, 'adaptive');
-    assert.ok(last.pendingCount <= TTA_SKIP_WHEN_PENDING_ABOVE);
+    assert.ok(modes.every((row) => row.ttaMode === 'adaptive'));
   });
 });
 

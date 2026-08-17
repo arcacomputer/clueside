@@ -12,10 +12,12 @@ export const TTA_ADAPTIVE_LOW = 0.15;
  * A single view at or above this score carries the verdict on its own and
  * stops remaining crops. Below it, a mid-band AI verdict needs agreement
  * (see CF_AGREEMENT_MIN_VIEWS): live CDN-processed real photos can spike
- * one crop into the 0.65 to 0.85 band while every other crop stays low,
- * and a lone spiked crop is weak evidence.
+ * one crop into the 0.65 to 0.95 band while every other crop stays low,
+ * and a lone spiked crop is weak evidence. 0.85 was too low: Unsplash
+ * featured-feed center crops land in 0.81-0.94 and would early-exit
+ * before extras could disagree.
  */
-export const TTA_EARLY_EXIT = 0.85;
+export const TTA_EARLY_EXIT = 0.95;
 
 /** Views at or above the threshold required for a mid-band CF verdict. */
 export const CF_AGREEMENT_MIN_VIEWS = 2;
@@ -58,7 +60,7 @@ export function aggregateViewScores(scores) {
  * Extra 440-corner / 512-center crops only help when the official center
  * crop is uncertain. A confident real (for example 0.04) will not become
  * 0.65 by taking the max of six similar scores. The band now extends
- * through the mid-band verdict range so a center crop in [0.65, 0.85)
+ * through the mid-band verdict range so a center crop in [0.65, 0.95)
  * gathers corroborating views before the agreement rule judges it.
  * @param {number} centerScore
  */
@@ -84,21 +86,21 @@ export function foldTtaScores(scores, options = {}) {
   const earlyExit = options.earlyExit ?? TTA_EARLY_EXIT;
 
   if (!scores?.length) {
-    return { neuralPAi: 0.5, extraRan: false, earlyExit: false, used: [] };
+    return { neuralPAi: 0.5, extraRan: false, earlyExit: false, used: [], agreementFallback: false };
   }
 
   const center = clamp01(scores[0]);
   const used = [center];
 
   if (center >= earlyExit) {
-    return { neuralPAi: center, extraRan: false, earlyExit: true, used };
+    return { neuralPAi: center, extraRan: false, earlyExit: true, used, agreementFallback: false };
   }
 
   const runExtra =
     mode === 'always' || (mode === 'adaptive' && shouldRunExtraCrops(center));
 
   if (!runExtra) {
-    return { neuralPAi: center, extraRan: false, earlyExit: false, used };
+    return { neuralPAi: center, extraRan: false, earlyExit: false, used, agreementFallback: false };
   }
 
   let max = center;
@@ -107,11 +109,18 @@ export function foldTtaScores(scores, options = {}) {
     used.push(v);
     if (v > max) max = v;
     if (v >= earlyExit) {
-      return { neuralPAi: max, extraRan: true, earlyExit: true, used };
+      return { neuralPAi: max, extraRan: true, earlyExit: true, used, agreementFallback: false };
     }
   }
 
-  return { neuralPAi: agreedMax(max, used, threshold), extraRan: true, earlyExit: false, used };
+  const neuralPAi = agreedMax(max, used, threshold);
+  return {
+    neuralPAi,
+    extraRan: true,
+    earlyExit: false,
+    used,
+    agreementFallback: neuralPAi < max && max >= threshold,
+  };
 }
 
 /**

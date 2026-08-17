@@ -145,7 +145,7 @@ import bench from '../../../eval/benchmark-results.json';
         <div class="metric-main">
           <span class="metric-label">Shipped balanced accuracy</span>
           <strong>{bench.bench.ba}<span>%</span></strong>
-          <p>raw 0.65 · v{pkg.version} · harness verified</p>
+          <p>raw 0.65 · last full 893-image run (v1.3.2 adaptive path)</p>
         </div>
         <dl>
           <div><dt>Current policy</dt><dd>{bench.bench.ba}%</dd><dd class="metric-detail">TPR {bench.bench.tpr}% · TNR {bench.bench.tnr}% · raw 0.65</dd></div>
@@ -158,7 +158,7 @@ import bench from '../../../eval/benchmark-results.json';
         <span>AI sources</span><p>DALL-E 3 · Flux 1.1 · GPT-4o · Midjourney · Stable Diffusion-era</p>
         <span>Real sources</span><p>COCO · Flickr30k · ImageNet-style · CelebA · Food101</p>
       </div>
-      <p class="honesty-note">Honesty update, 2026-08-16: our own live-site smoke test of v1.2.0 failed on CDN-processed professional photography, and we published the full findings, isolation experiments, and fixes in the repo. Two fix rounds later (a view-agreement rule, live-CDN and product-CDN hard negatives, and two new permanent guard sets), the third smoke run measured 3.21 percent confirmed-real false positives, down from 24.3 percent, and v1.3.2 added a WebGPU watchdog with automatic WASM fallback after that run exposed a stall under GPU load. The benchmark above stays reproducible as stated, and contributions of live counterexamples are welcome.</p>
+      <p class="honesty-note">Honesty update, 2026-08-17: a live pass of the public v1.3.2 zip on the Unsplash featured feed still failed (15 AI of 26 badges, editorial photos at 81-94 percent). The 3.0 percent held-out live-CDN guard was scored with full adaptive TTA; the live page shed to center-only and disabled agreement. v1.3.3 never sheds TTA, raises the single-view early-exit to 0.95, and blocks middling DINO lifts after an agreement fallback. A runnable stand-in scored here (39 Unsplash CDN JPEGs + 16 DALL-E 3) went from 3/39 live FPs at 43.8 percent TPR under v1.3.2 to 1/39 at the same TPR. The 893-image numbers above are the last full v1.3.2 adaptive-path run; that fixture is not in git and was not re-scored here. A full live Unsplash re-smoke of v1.3.3 has not been published. Live counterexamples are welcome.</p>
       <a class="text-link" href="https://github.com/arcacomputer/clueside#local-benchmark">Read the benchmark method <span aria-hidden="true">↗</span></a>
       <a class="text-link" href="https://github.com/arcacomputer/clueside/blob/main/docs/live-smoke-2026-08-16.md">Read the live smoke findings <span aria-hidden="true">↗</span></a>
     </section>

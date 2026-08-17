@@ -315,7 +315,7 @@ async function resolveImageBytes(message) {
  * One neural pass (graphic gate + DINO + CF) on whatever backend is current.
  * @param {ArrayBuffer} bytes
  * @param {'adaptive'|'always'|'center'} mode
- * @returns {Promise<{ cfPAi: number, dinoPAi: number|null, graphicGate: boolean }>}
+ * @returns {Promise<{ cfPAi: number, dinoPAi: number|null, graphicGate: boolean, agreementFallback: boolean }>}
  */
 async function scoreImageOnce(bytes, mode) {
   const { session: activeSession } = await ensureSession();
@@ -327,16 +327,19 @@ async function scoreImageOnce(bytes, mode) {
     const dinoPAi = await dinoScore(bitmap);
 
     let cfPAi;
+    let agreementFallback = false;
     if (mode === 'center') {
       const chw = await preprocessBitmap(bitmap);
       cfPAi = await predictCHW(activeSession, chw);
     } else {
       const views = await preprocessBitmapViews(bitmap);
       const effectiveMode = effectiveTtaMode(mode, dinoPAi);
-      cfPAi = (await predictAdaptiveViews(activeSession, views, { mode: effectiveMode })).neuralPAi;
+      const viewed = await predictAdaptiveViews(activeSession, views, { mode: effectiveMode });
+      cfPAi = viewed.neuralPAi;
+      agreementFallback = viewed.agreementFallback === true;
     }
 
-    return { cfPAi, dinoPAi, graphicGate };
+    return { cfPAi, dinoPAi, graphicGate, agreementFallback };
   } finally {
     bitmap.close();
   }
@@ -382,10 +385,14 @@ async function classifyImage(rawBytes, url, customThreshold, ttaMode) {
   let modelError = null;
 
   try {
-    const { cfPAi, dinoPAi, graphicGate } = await scoreImageWithFallback(bytes, mode);
+    const { cfPAi, dinoPAi, graphicGate, agreementFallback } = await scoreImageWithFallback(
+      bytes,
+      mode
+    );
 
     fused = fuseInferenceScores(cfPAi, dinoPAi, heuristics, activeThreshold, {
       graphicGate,
+      agreementFallback,
     });
     if (graphicGate && cfPAi < DEFAULT_THRESHOLD) {
       fused.reasons.push('Flat graphic gate: DINO lift suppressed');

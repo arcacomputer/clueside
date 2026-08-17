@@ -2,7 +2,7 @@
 
 **Author:** Luis Felipe Abarca  
 **Project license:** MIT (bundled assets have their own notices)
-**Version:** 1.3.2
+**Version:** 1.3.3
 
 Unpacked install from GitHub (`npm run fetch-model && npm run build`, then Load unpacked from `dist/`) remains the POIDH proof path. This file is listing copy for a future Chrome Web Store upload. The extension is **not** claimed to be on the Chrome Web Store.
 
@@ -26,8 +26,11 @@ How it works
   65%; between 2% and 20% DINO may only lift if it is near-saturated (>= 96%);
   between 20% and 65% DINO may lift at >= 70%. A flat-graphic guard prevents
   DINO from overriding CF on catalog art and UI-like images. CommunityForensics
-  TTA uses the maximum raw sigmoid from inspected crops. The decision threshold
-  is raw 65% p(AI), with no score remapping.
+  TTA uses the maximum raw sigmoid from inspected crops, with view
+  agreement: a lone crop in [65%, 95%) falls back to the runner-up, and
+  a middling DINO score cannot lift that fallback. The page queue never
+  sheds TTA to center-only. The decision threshold is raw 65% p(AI),
+  with no score remapping.
 - Hybrid metadata: C2PA digitalSourceType, EXIF/XMP/IPTC, generator text in PNG/JPEG, and weak URL hints. A URL hint alone cannot push a score over 65%.
 - Overlay badges on large page images. Popup drop zone for local files. Works fully offline after install; the zip includes all model weights.
 
@@ -103,7 +106,7 @@ Do not screenshot private or copyrighted photos you do not have rights to. Use t
 
 1. `npm ci && npm run package`
 2. Open the Chrome Web Store Developer Dashboard (one-time developer registration is a Google process; this repo does not submit for you).
-3. New item, upload `release/clueside-1.3.2.zip`
+3. New item, upload `release/clueside-1.3.3.zip`
 4. Paste the short and detailed descriptions above
 5. Set privacy policy URL to the hosted `docs/privacy.html`
 6. Attach screenshots and the 128px icon

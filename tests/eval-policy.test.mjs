@@ -10,9 +10,14 @@ import {
 
 describe('offline product policy mirror', () => {
   it('keeps production TTA gating fixed at raw 0.65', () => {
-    const rec = { views: { center: 0.55, tl: 0.9, tr: 0.2 } };
+    const rec = { views: { center: 0.55, tl: 0.96, tr: 0.2 } };
     assert.equal(DEFAULT_THRESHOLD, 0.65);
-    assert.equal(productCfScore(rec, null), 0.9);
+    assert.equal(productCfScore(rec, null), 0.96);
+  });
+
+  it('a lone 0.90 CF view falls back instead of early-exiting', () => {
+    const rec = { views: { center: 0.55, tl: 0.9, tr: 0.2 } };
+    assert.equal(productCfScore(rec, null), 0.55);
   });
 
   it('uses the fixed production threshold for CF-primary DINO fusion', () => {
